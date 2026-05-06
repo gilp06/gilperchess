@@ -21,7 +21,7 @@ void perform_search(board_t *starting_board, int depth) {
 
 move_t search_root(board_t *board, int depth) {
     if (depth == 0)
-        return evaluate(board);
+        return 0;
     int16_t max_v = INT16_MIN;
     move_t best_move = 0;
     move_t move_list[256];
@@ -57,13 +57,13 @@ int16_t search(board_t *board, int depth) {
     }
 
     if(repetitions >= 2) {
-         return -10000;   
+         return INT16_MIN+1;   
     }
     
     if (depth == 0)
         return evaluate(board);
         
-    int16_t max_v = INT16_MIN;
+    int16_t max_v = INT16_MIN+1;
     move_t move_list[256];
     size_t size,legal_moves=0;
     generate_pseudolegal_moves(board, board->side_to_move, move_list, &size);

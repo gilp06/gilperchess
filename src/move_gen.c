@@ -273,7 +273,7 @@ void generate_pseudolegal_moves(board_t *board, side_t side, move_t *moves,
     //     & CASTLING_ATTACK_MASK[side][QUEENSIDE]) && !occ)
     //         add_move(moves, count, start_pos, end_pos, CASTLING);
     // }
-
+    // 
     generate_king_moves(board, side, moves, count);
     generate_queen_moves(board, side, moves, count);
     generate_bishop_moves(board, side, moves, count);

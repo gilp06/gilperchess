@@ -33,14 +33,14 @@ static inline uint64_t perft(board_t *b, int depth) {
     for (int i = 0; i < move_count; i++) {
         dstate_t undo;
         if (perform_move(b, moves[i], &undo)) {
-            // uint64_t key = b->st.key;
-            // uint64_t key_regen = generate_key_from_scratch(b);
+            uint64_t key = b->st.key;
+            uint64_t key_regen = generate_key_from_scratch(b);
             
-            // if(key != key_regen)
-            // {
-            //     print_pieces(b->pieces_at);
-            //     printf("expected %llx got %llx!\n", key_regen, key);
-            // }
+            if(key != key_regen)
+            {
+                print_pieces(b->pieces_at);
+                printf("expected %llx got %llx!\n", key_regen, key);
+            }
             nodes += perft(b, depth - 1);
         }
         undo_move(b, &undo);

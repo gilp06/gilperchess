@@ -7,6 +7,7 @@
 #include "board.h"
 #include "move_gen.h"
 #include "perft.h"
+#include "search.h"
 #include "types.h"
 #include "uci.h"
 
@@ -50,7 +51,7 @@ bool uci_loop(board_t *board) {
         }
         case COMMAND_GO: {
             tok = strtok_r(NULL, " \n", &last);
-            if (strcmp(tok, "perft") == 0) {
+            if (tok != NULL && strcmp(tok, "perft") == 0) {
                 tok = strtok_r(NULL, " \n", &last);
                 int depth = atoi(tok);
                 if (depth > 0) {
@@ -63,28 +64,7 @@ bool uci_loop(board_t *board) {
             }
             else
             {
-
-                move_t moves[256];
-                size_t count = 0;
-                generate_pseudolegal_moves(board, board->side_to_move, moves,
-                                           &count);
-                bool played = false;
-                move_t selected;
-                while(!played)
-                {
-                    selected = moves[rand() % count];
-                    dstate_t undo;
-                    bool legal = perform_move(board, selected, &undo);
-                    if (legal) {
-                        played = true;
-                    }
-                    undo_move(board, &undo);
-                }
-
-                char move_string[6];
-                move_to_string(selected, move_string);
-                printf("bestmove %s\n", move_string);
-                fflush(stdout);
+                perform_search(board, 5);
             }
             return false;
         }
@@ -171,9 +151,7 @@ bool uci_loop(board_t *board) {
                 if (cr & CASTLING_RIGHTS_BQUEENSIDE)
                     printf("q");
                 printf("\n");
-            } else if (strcmp(tok, "attacks") == 0) {
-                print_bb(generate_attack_mask(board, board->side_to_move));
-                print_bb(generate_attack_mask(board, !board->side_to_move));
+                printf("halfmove: %d, fullmove: %d\n", board->st.halfmove_clock, board->st.fullmove_clock);
             }
             return false;
         }

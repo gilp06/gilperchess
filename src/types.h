@@ -107,16 +107,16 @@ typedef struct s_state {
     bindex_t ep_square;
     uint8_t castling_rights;
     uint8_t ep_was_possible;
+    int halfmove_clock, fullmove_clock;
 } state_t;
 
 typedef struct s_board {
-    int move_number;
+    int move_number; // this is the number of plys currently stored in history
     side_t side_to_move;
     bb_t pieces_occ[6]; // indexed by piecetype_t
     bb_t sides_occ[2];  // indexed by side_t
     piece_t pieces_at[64];
-
-    int halfmove_clock;
+    uint64_t key_hist[8192]; // this is what ethereal uses, I think it should be sufficient
     state_t st;
 } board_t;
 

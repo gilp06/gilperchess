@@ -15,6 +15,8 @@ target_sources(gilperchess
         src/utils.c
         src/uci.c
         src/hashtable.c
+        src/search.c
+        src/eval.c
 )
 target_compile_options(gilperchess PRIVATE -Wall -march=native -O3 -flto -funroll-loops)
  

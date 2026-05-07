@@ -20,3 +20,13 @@ target_sources(gilperchess
 )
 target_compile_options(gilperchess PRIVATE -Wall -march=native -O3 -flto -funroll-loops)
  
+string(TIMESTAMP BUILD_TIME "%Y%m%d-%H%M%S")
+
+set(OLD_DIR ${CMAKE_BINARY_DIR}/old)
+
+add_custom_command(TARGET gilperchess POST_BUILD   
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${OLD_DIR}
+    COMMAND ${CMAKE_COMMAND} -E copy
+        $<TARGET_FILE:gilperchess>
+        ${OLD_DIR}/gilperchess-${BUILD_TIME}$<TARGET_FILE_SUFFIX:gilperchess>
+)

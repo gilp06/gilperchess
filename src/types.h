@@ -1,7 +1,9 @@
 #pragma once
 
+
 #include <stdint.h>
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
 
 typedef uint64_t bb_t;
@@ -126,7 +128,7 @@ typedef struct s_dstate {
     state_t prev_state;
 } dstate_t;
 
-typedef enum e_square {
+typedef enum e_square {    
     A1 = 0,
     B1,
     C1,

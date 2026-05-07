@@ -4,8 +4,9 @@
 
 #include "types.h"
 #include "board.h"
+#include "search.h"
 
-bool uci_loop(board_t* board);
+bool uci_loop(global_state_t* gs, board_t* board);
 
 
 typedef enum e_uci_command {

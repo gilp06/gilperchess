@@ -11,7 +11,7 @@
 #include "types.h"
 #include "uci.h"
 
-bool uci_loop(board_t *board) {
+bool uci_loop(global_state_t *gs, board_t *board) {
     char input[10000];
     fgets(input, 10000, stdin);
 
@@ -64,7 +64,7 @@ bool uci_loop(board_t *board) {
             }
             else
             {
-                perform_search(board, 5);
+                perform_search(gs, board, 6);
             }
             return false;
         }

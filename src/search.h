@@ -13,6 +13,6 @@ typedef struct s_global_state {
 
 
 void perform_search(global_state_t* gs, board_t* starting_board, int depth);
-int16_t alphabeta(global_state_t* gs, board_t *board, bool root, int16_t depth, int16_t alpha, int16_t beta);
+int16_t alphabeta(global_state_t* gs, board_t *board, bool root, int16_t depth, int16_t alpha, int16_t beta, int16_t ply);
 // move_t search_root(board_t *board, int depth);
 // int16_t search(board_t *board, int depth);

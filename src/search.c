@@ -14,7 +14,7 @@
 void perform_search(global_state_t *gs, board_t *starting_board, int depth) {
 
     gs->best_move = 0;
-    alphabeta(gs, starting_board, true, depth, INT16_MIN+1, INT16_MAX);
+    alphabeta(gs, starting_board, true, depth, INT16_MIN+1, INT16_MAX, 0);
     move_t result = gs->best_move;
     char f[6];
     move_to_string(result, f);
@@ -23,15 +23,11 @@ void perform_search(global_state_t *gs, board_t *starting_board, int depth) {
 }
 
 int16_t alphabeta(global_state_t *gs, board_t *board, bool root_node,
-                  int16_t depth, int16_t alpha, int16_t beta) {
-    const bool pv_node = alpha != beta - 1;
+                  int16_t depth, int16_t alpha, int16_t beta, int16_t ply) {
 
     int16_t alpha_orig = alpha;
 
     if (!root_node) {
-        if (depth == 0)
-            return evaluate(board);
-
         if (board->st.halfmove_clock == 100)
             return 0;
 
@@ -55,11 +51,13 @@ int16_t alphabeta(global_state_t *gs, board_t *board, bool root_node,
             if (entry.flag == EXACT ||
                 (entry.flag == LOWERBOUND && entry.value >= beta) ||
                 (entry.flag == UPPERBOUND && entry.value <= alpha)) {
-                // printf("using cached value\n");
                 return entry.value;
             }
         }
     }
+    
+    if (depth == 0)
+        return evaluate(board);
 
     // generate move list
     move_t moves[256];
@@ -69,7 +67,7 @@ int16_t alphabeta(global_state_t *gs, board_t *board, bool root_node,
     int16_t best_value = INT16_MIN;
     int16_t played = 0;
     move_t best_move = 0;
-
+    int16_t value;
     // TODO: REPLACE WITH MOVE PICKER
     for (int i = 0; i < move_count; i++) {
         dstate_t undo;
@@ -78,11 +76,8 @@ int16_t alphabeta(global_state_t *gs, board_t *board, bool root_node,
             undo_move(board, &undo);
             continue;
         }
-        if (played == 0) {
-            best_move = moves[i];
-        }
         played++;
-        int16_t value = -alphabeta(gs, board, false, depth - 1, -beta, -alpha);
+        value = -alphabeta(gs, board, false, depth - 1, -beta, -alpha, ply+1);            
         if (value > best_value) {
             best_value = value;
             best_move = moves[i];
@@ -101,20 +96,19 @@ int16_t alphabeta(global_state_t *gs, board_t *board, bool root_node,
 
     if (played == 0) {
         if (in_check(board, board->side_to_move))
-            return INT16_MIN + board->st.fullmove_clock + 1;
+            return INT16_MIN + ply;
         else
             return 0;
     }
 
     if (!root_node) {
-        // write tt entry
         tt_entry_t entry;
         entry.depth = depth;
         entry.hash = board->st.key;
         entry.value = best_value;
         entry.flag = best_value >= beta        ? LOWERBOUND
-                     : best_value > alpha_orig ? EXACT
-                                               : UPPERBOUND;
+                     : best_value <= alpha_orig ? UPPERBOUND
+                                               : EXACT;
         entry.bestmove = (entry.flag == UPPERBOUND) ? 0 : best_move;
 
         write_tt_entry(gs->transposition_table, entry);

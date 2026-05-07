@@ -64,7 +64,7 @@ typedef enum e_tt_flag {
 typedef struct s_tt_entry {
     uint64_t hash;
     uint16_t bestmove;
-    int16_t score;
+    int16_t value;
     uint8_t depth;
     tt_flag flag;
 } tt_entry_t;

@@ -5,6 +5,7 @@
 #include <string.h>
 
 #include "board.h"
+#include "hashtable.h"
 #include "move_gen.h"
 #include "perft.h"
 #include "search.h"
@@ -32,6 +33,8 @@ bool uci_loop(global_state_t *gs, board_t *board) {
             command = COMMAND_DISPLAY;
         } else if (strcmp(tok, "quit") == 0) {
             command = COMMAND_QUIT;
+        } else if (strcmp(tok, "ucinewgame") == 0) {
+            command = COMMAND_UCINEWGAME;
         }
 
         switch (command) {
@@ -49,6 +52,10 @@ bool uci_loop(global_state_t *gs, board_t *board) {
             fflush(stdout);
             return false;
         }
+        case COMMAND_UCINEWGAME: {
+            clear_ttable(&gs->transposition_table);
+            return false;        
+        }
         case COMMAND_GO: {
             tok = strtok_r(NULL, " \n", &last);
             if (tok != NULL && strcmp(tok, "perft") == 0) {
@@ -64,7 +71,7 @@ bool uci_loop(global_state_t *gs, board_t *board) {
             }
             else
             {
-                perform_search(gs, board, 6);
+                perform_search(gs, board, 7);
             }
             return false;
         }

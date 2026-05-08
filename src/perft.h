@@ -69,7 +69,7 @@ static inline void perft_top(board_t *b, int depth) {
             char root_move[6];
             move_to_string(moves[i], root_move);
             printf("%s: %llu\n", root_move, nodes);
-            fflush(stdin);
+            fflush(stdout);
         }
         undo_move(b, &undo);
     }
@@ -81,5 +81,5 @@ static inline void perft_top(board_t *b, int depth) {
     printf("[perft] time (sec): %lf, nodes/sec: %lf\n", time_taken,
            node_total / time_taken);
     printf("[perft] total nodes: %lld\n", node_total);
-    fflush(stdin);
+    fflush(stdout);
 }

@@ -8,7 +8,6 @@
 #include <time.h>
 
 int main() {
-
     setvbuf(stdout, NULL, _IONBF, 0);
 
     init_pext_table();
@@ -18,7 +17,7 @@ int main() {
     board_t b;
     init_board_from_start(&b);
 
-    global_state_t gs;
+    globalstate_t gs;
     gs.transposition_table = init_transposition_table(1ULL << 25);
     clear_ttable(&gs.transposition_table);
     bool done = false;

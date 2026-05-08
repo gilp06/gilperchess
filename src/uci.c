@@ -12,7 +12,7 @@
 #include "types.h"
 #include "uci.h"
 
-bool uci_loop(global_state_t *gs, board_t *board) {
+bool uci_loop(globalstate_t *gs, board_t *board) {
     char input[10000];
     fgets(input, 10000, stdin);
 

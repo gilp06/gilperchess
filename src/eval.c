@@ -60,7 +60,6 @@ int16_t evaluate(board_t *board)
 {
     int eval = 0;
 
-    // detect endgame: no queens on board
     int queens =
         __builtin_popcountll(board->pieces_occ[PIECETYPE_QUEEN]);
 

@@ -92,7 +92,9 @@ static inline piecetype_t move_promo(move_t move) {
     return promo_piecetype(move & (3 << 12));
 }
 
-static inline piecetype_t piece_type(piece_t piece) { return (piece >> 1) - 1; }
+static inline piecetype_t piece_type(piece_t piece) {
+    return (piece >> 1) - 1;
+}
 
 static inline side_t piece_side(piece_t piece) { return (piece & 1); }
 

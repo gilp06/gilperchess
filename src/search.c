@@ -8,25 +8,73 @@
 #include "search.h"
 #include "types.h"
 #include "utils.h"
+#include "pthread.h"
 
 // move_t alphabeta_root(global_state_t* gs, board_t *board, int16_t depth);
 
-void perform_search(globalstate_t *gs, board_t *starting_board, int depth) {
+static void* search_thread(void *arg);
+
+
+
+
+sthreaddata_t td[1];
+
+void start_search(globalstate_t *gs, board_t *starting_board, int depth) {
 
     gs->best_move = 0;
-    alphabeta(gs, starting_board, true, depth, INT16_MIN + 1, INT16_MAX, 0);
-    move_t result = gs->best_move;
-    char f[6];
-    move_to_string(result, f);
-    printf("bestmove %s\n", f);
+    gs->nodes = 0;
+
+    pthread_t thread;
+
+    for (int i = 1; i <= depth; i++)
+    {
+        memcpy(&td[0].board, starting_board, sizeof(board_t));
+        td[0].gs = gs;
+        td[0].depth = i;
+        
+        pthread_create(&thread, NULL, search_thread, (void*) &td);
+
+        // wait for thread to finish threading
+        pthread_join(thread, NULL);
+
+        // retreive the score and the current best move
+        int16_t score = td[0].score;
+        move_t move = td[0].best_move;
+
+        // update current available best move and score
+        gs->best_move = move;
+        printf("info nodes %llu depth %d score cp %d\n", gs->nodes, i, score);
+        fflush(stdout);
+    }
+
+    // when done output bestmove
+    char m[6];
+    move_to_string(gs->best_move, m);
+    printf("bestmove %s\n",m);
     fflush(stdout);
 }
 
-int16_t alphabeta(globalstate_t *gs, board_t *board, bool root_node,
+
+static void* search_thread(void *arg)
+{
+    sthreaddata_t *td = (sthreaddata_t*) arg;
+
+    td->score = alphabeta(td, true, td->depth, INT16_MIN+1, INT16_MAX, 0);
+    
+    return NULL;
+}
+
+int16_t alphabeta(sthreaddata_t* td, bool root_node,
                   int16_t depth, int16_t alpha, int16_t beta, int16_t ply) {
+
+    globalstate_t* gs = td->gs;
+    board_t* board = &td->board;
+
+    gs->nodes++;
 
     int16_t alpha_orig = alpha;
     int16_t tt_move = 0;
+    
 
     if (!root_node) {
         if (board->st.halfmove_clock == 100)
@@ -62,7 +110,7 @@ int16_t alphabeta(globalstate_t *gs, board_t *board, bool root_node,
         return evaluate(board);
 
     moveselect_t move_select;
-    init_select(board, &move_select, tt_move);
+    init_select(board, &move_select, tt_move, false);
 
     int16_t best_value = INT16_MIN;
     int16_t played = 0;
@@ -80,7 +128,7 @@ int16_t alphabeta(globalstate_t *gs, board_t *board, bool root_node,
             continue;
         }
         played++;
-        value = -alphabeta(gs, board, false, depth - 1, -beta, -alpha, ply + 1);
+        value = -alphabeta(td, false, depth - 1, -beta, -alpha, ply + 1);
         if (value > best_value) {
             best_value = value;
             best_move = cur_move;
@@ -116,7 +164,7 @@ int16_t alphabeta(globalstate_t *gs, board_t *board, bool root_node,
 
         write_tt_entry(gs->transposition_table, entry);
     } else {
-        gs->best_move = best_move;
+        td->best_move = best_move;
     }
 
     return best_value;
@@ -142,9 +190,10 @@ void score_moves(board_t *board, moveselect_t *move_select) {
     }
 }
 
-void init_select(board_t *board, moveselect_t *move_select, move_t tt_move) {
+void init_select(board_t *board, moveselect_t *move_select, move_t tt_move, bool nonquiet_only) {
     move_select->phase = (tt_move != 0) ? TT_MOVE : GEN_MOVES;
     move_select->tt_move = tt_move;
+    move_select->nonquiet_only = nonquiet_only;
 }
 
 // from ethereal, i like this

@@ -71,7 +71,7 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
             }
             else
             {
-                perform_search(gs, board, 7);
+                start_search(gs, board, 7);
             }
             return false;
         }

@@ -175,7 +175,7 @@ void init_board_from_fen(board_t *board, const char *str) {
         fullmove = fullmove * 10 + (*str - '0');
         str++;
     }
-    
+
     board->st.key = generate_key_from_scratch(board);
     board->key_hist[0] = board->st.key;
     board->st.fullmove_clock = fullmove;
@@ -186,12 +186,11 @@ typedef bool (*move_fn)(board_t *board, move_t move, dstate_t *undo);
 
 static bool handle_normal(board_t *board, move_t move, dstate_t *undo) {
 
-
-    state_t* st = &(board->st);
+    state_t *st = &(board->st);
     bb_t *pieces_occ = board->pieces_occ;
     bb_t *sides_occ = board->sides_occ;
     piece_t *pieces_at = board->pieces_at;
-    
+
     bindex_t from = move_from(move);
     bindex_t to = move_to(move);
     side_t us = board->side_to_move;
@@ -218,7 +217,7 @@ static bool handle_normal(board_t *board, move_t move, dstate_t *undo) {
     if (cap) {
 
         st->halfmove_clock = 0;
-        
+
         pieces_occ[piece_type(pcaptured)] ^= to_bb;
         sides_occ[them] ^= to_bb;
         undo->captured = pcaptured;
@@ -228,19 +227,19 @@ static bool handle_normal(board_t *board, move_t move, dstate_t *undo) {
     // check if pawn
     if (pc_type == PIECETYPE_PAWN) {
         st->halfmove_clock = 0;
-        
+
         bb_t from_mask = RANK_MASKS[DOUBLE_PUSH_MASK[us][0]];
         bb_t to_mask = RANK_MASKS[DOUBLE_PUSH_MASK[us][1]];
 
         if ((from_bb & from_mask) && (to_bb & to_mask)) {
             st->ep_square = to - PUSH_DIR[us];
 
-
-            // polyglot requires checking if the ep square is actually possible to take
+            // polyglot requires checking if the ep square is actually possible
+            // to take
             if (PAWN_ATTACKS[them][board->st.ep_square] &
                 (pieces_occ[PIECETYPE_PAWN] & sides_occ[them])) {
-                st->key ^= RANDOM_64[RANDOM_ENPASSANT +
-                                           SQUARE_TO_FILE[st->ep_square]];
+                st->key ^=
+                    RANDOM_64[RANDOM_ENPASSANT + SQUARE_TO_FILE[st->ep_square]];
                 st->ep_was_possible = 1;
             }
         }
@@ -259,7 +258,7 @@ static bool handle_normal(board_t *board, move_t move, dstate_t *undo) {
 
 static bool handle_ep(board_t *board, move_t move, dstate_t *undo) {
     board->st.halfmove_clock = 0;
-    
+
     bindex_t from = move_from(move);
     bindex_t to = move_to(move);
     side_t us = board->side_to_move;
@@ -288,7 +287,8 @@ static bool handle_ep(board_t *board, move_t move, dstate_t *undo) {
 
     board->st.key ^= fetch_random_piece(pc, from);
     board->st.key ^= fetch_random_piece(pc, to);
-    board->st.key ^= fetch_random_piece(make_piece(PIECETYPE_PAWN, them), cs); // en passant capture
+    board->st.key ^= fetch_random_piece(make_piece(PIECETYPE_PAWN, them),
+                                        cs); // en passant capture
     return true;
 }
 
@@ -335,7 +335,7 @@ static bool handle_castling(board_t *board, move_t move, dstate_t *undo) {
 
 static bool handle_promotion(board_t *board, move_t move, dstate_t *undo) {
     board->st.halfmove_clock = 0;
-    
+
     bindex_t from = move_from(move);
     bindex_t to = move_to(move);
     side_t us = board->side_to_move;
@@ -357,7 +357,7 @@ static bool handle_promotion(board_t *board, move_t move, dstate_t *undo) {
     bool cap = (pcaptured != PIECE_NONE);
 
     board->st.key ^= fetch_random_piece(pc, from);
-    board->st.key ^= fetch_random_piece(make_piece(promo,us), to);
+    board->st.key ^= fetch_random_piece(make_piece(promo, us), to);
 
     if (cap) {
         board->pieces_occ[piece_type(pcaptured)] ^= (1ULL << to);
@@ -381,8 +381,6 @@ bool perform_move(board_t *board, move_t move, dstate_t *undo) {
     undo->captured = PIECE_NONE;
     undo->prev_state = board->st;
 
-    
-
     // increment previous position into history
     board->key_hist[board->move_number++] = board->st.key;
 
@@ -401,15 +399,14 @@ bool perform_move(board_t *board, move_t move, dstate_t *undo) {
 
     board->st.halfmove_clock++;
 
-    if(us == SIDE_BLACK)
+    if (us == SIDE_BLACK)
         board->st.fullmove_clock++;
-    
+
     move_handlers[mt >> 14](board, move, undo);
 
     board->side_to_move = them;
     board->st.key ^= RANDOM_64[RANDOM_TURN];
 
-    
     // int repetitions = 0;
     // for (int i = board->move_number - 1; i >= 0; i--)
     // {
@@ -419,7 +416,8 @@ bool perform_move(board_t *board, move_t move, dstate_t *undo) {
     // }
 
     // if(repetitions != 0)
-    //     printf("repetition %d, move number %d\n", repetitions, board->move_number);
+    //     printf("repetition %d, move number %d\n", repetitions,
+    //     board->move_number);
 
     return !in_check(board, us);
 }
@@ -556,7 +554,7 @@ void undo_move(board_t *board, dstate_t *undo) {
     movetype_t mt = move_type(move);
     undo_handlers[mt >> 14](board, undo);
 
-    board->move_number--; 
+    board->move_number--;
     board->side_to_move = !board->side_to_move;
 }
 
@@ -565,4 +563,27 @@ bool in_check(board_t *board, side_t side) {
 
     bindex_t king_sq = __builtin_ctzll(king);
     return is_attacked(board, side, king_sq);
+}
+
+bool is_draw(board_t *board) {
+
+    if (board->st.halfmove_clock >= 100)
+        return true;
+
+    int repetitions = 0;
+
+    int start = board->move_number - board->st.halfmove_clock;
+
+    if (start < 0)
+        start = 0;
+
+    for (int i = board->move_number - 2; i >= start; i -= 2) {
+
+        if (board->st.key == board->key_hist[i]) {
+            repetitions++;
+        }
+    }
+    if (repetitions >= 2)
+        printf("repetitions: %d\n", repetitions);
+    return repetitions >= 2;
 }

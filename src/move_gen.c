@@ -8,7 +8,7 @@
 #include "board.h"
 
 void generate_pawn_moves(board_t *board, side_t side, move_t *moves,
-                         size_t *count) {
+                         size_t *count, bool only_nonquiet) {
 
     bb_t pawns = board->pieces_occ[PIECETYPE_PAWN] & board->sides_occ[side];
     bb_t blockers = board->sides_occ[side] | board->sides_occ[!side];
@@ -102,6 +102,8 @@ void generate_pawn_moves(board_t *board, side_t side, move_t *moves,
         }
     }
 
+    if (only_nonquiet) return;
+
     while (fpush_bb) {
         bindex_t end_pos = __builtin_ctzll(fpush_bb);
         bindex_t start_pos = end_pos - PUSH_DIR[side];
@@ -118,7 +120,7 @@ void generate_pawn_moves(board_t *board, side_t side, move_t *moves,
 }
 
 void generate_knight_moves(board_t *board, side_t side, move_t *moves,
-                           size_t *count) {
+                           size_t *count, bool only_nonquiet) {
     bb_t knights = board->pieces_occ[PIECETYPE_KNIGHT] & board->sides_occ[side];
     bb_t our_pieces = board->sides_occ[side];
     bb_t potential_captures = board->sides_occ[!side];
@@ -127,13 +129,13 @@ void generate_knight_moves(board_t *board, side_t side, move_t *moves,
         bindex_t start_pos = __builtin_ctzll(knights);
         bb_t move_mask = KNIGHT_MOVES[start_pos];
         insert_mask_moves(moves, count, start_pos, move_mask,
-                          potential_captures, our_pieces);
+                          potential_captures, our_pieces, only_nonquiet);
         knights = (knights & (knights - 1));
     }
 }
 
 void generate_bishop_moves(board_t *board, side_t side, move_t *moves,
-                           size_t *count) {
+                           size_t *count, bool only_nonquiet) {
     bb_t bishops = board->pieces_occ[PIECETYPE_BISHOP] & board->sides_occ[side];
     bb_t our_pieces = board->sides_occ[side];
     bb_t potential_captures = board->sides_occ[!side];
@@ -143,13 +145,13 @@ void generate_bishop_moves(board_t *board, side_t side, move_t *moves,
         bindex_t start_pos = __builtin_ctzll(bishops);
         bb_t move_mask = fetch_bishop_moves(start_pos, blockers);
         insert_mask_moves(moves, count, start_pos, move_mask,
-                          potential_captures, our_pieces);
+                          potential_captures, our_pieces, only_nonquiet);
         bishops = (bishops & (bishops - 1));
     }
 }
 
 void generate_rook_moves(board_t *board, side_t side, move_t *moves,
-                         size_t *count) {
+                         size_t *count, bool only_nonquiet) {
     bb_t rooks = board->pieces_occ[PIECETYPE_ROOK] & board->sides_occ[side];
     bb_t our_pieces = board->sides_occ[side];
     bb_t potential_captures = board->sides_occ[!side];
@@ -159,13 +161,13 @@ void generate_rook_moves(board_t *board, side_t side, move_t *moves,
         bindex_t start_pos = __builtin_ctzll(rooks);
         bb_t move_mask = fetch_rook_moves(start_pos, blockers);
         insert_mask_moves(moves, count, start_pos, move_mask,
-                          potential_captures, our_pieces);
+                          potential_captures, our_pieces, only_nonquiet);
         rooks = (rooks & (rooks - 1));
     }
 }
 
 void generate_queen_moves(board_t *board, side_t side, move_t *moves,
-                          size_t *count) {
+                          size_t *count, bool only_nonquiet) {
     bb_t queens = board->pieces_occ[PIECETYPE_QUEEN] & board->sides_occ[side];
     bb_t our_pieces = board->sides_occ[side];
     bb_t potential_captures = board->sides_occ[!side];
@@ -176,13 +178,13 @@ void generate_queen_moves(board_t *board, side_t side, move_t *moves,
         bb_t move_mask = fetch_rook_moves(start_pos, blockers) |
                          fetch_bishop_moves(start_pos, blockers);
         insert_mask_moves(moves, count, start_pos, move_mask,
-                          potential_captures, our_pieces);
+                          potential_captures, our_pieces, only_nonquiet);
         queens = (queens & (queens - 1));
     }
 }
 
 void generate_king_moves(board_t *board, side_t side, move_t *moves,
-                         size_t *count) {
+                         size_t *count, bool only_nonquiet) {
     // assume 1 king
     bb_t king = board->pieces_occ[PIECETYPE_KING] & board->sides_occ[side];
     bb_t our_pieces = board->sides_occ[side];
@@ -191,7 +193,7 @@ void generate_king_moves(board_t *board, side_t side, move_t *moves,
     bindex_t start_pos = __builtin_ctzll(king);
     bb_t move_mask = KING_MOVES[start_pos];
     insert_mask_moves(moves, count, start_pos, move_mask, potential_captures,
-                      our_pieces);
+                      our_pieces, only_nonquiet);
 }
 
 // void insert_mask_moves(move_t *moves, size_t *count, bindex_t from, bb_t
@@ -206,7 +208,7 @@ void generate_king_moves(board_t *board, side_t side, move_t *moves,
 // }
 
 void generate_pseudolegal_moves(board_t *board, side_t side, move_t *moves,
-                                size_t *count) {
+                                size_t *count, bool only_nonquiet) {
 
     *count = 0;
 
@@ -248,38 +250,12 @@ void generate_pseudolegal_moves(board_t *board, side_t side, move_t *moves,
         }
     }
 
-    // if (board->st.castling_rights &
-    //     (side ? CASTLING_RIGHTS_BKINGSIDE : CASTLING_RIGHTS_WKINGSIDE)) {
-
-    //     attack_mask = generate_attack_mask(board, !side);
-
-    //     bindex_t start_pos = KING_CASTLING_POS[side][KINGSIDE][0];
-    //     bindex_t end_pos = KING_CASTLING_POS[side][KINGSIDE][1];
-    //     bool occ = CASTLING_OCC_MASK[side][KINGSIDE] &
-    //     (board->sides_occ[side] | board->sides_occ[!side]); if(!(attack_mask
-    //     & CASTLING_ATTACK_MASK[side][KINGSIDE]) && !occ)
-    //         add_move(moves, count, start_pos, end_pos, CASTLING);
-    // }
-    // if (board->st.castling_rights &
-    //     (side ? CASTLING_RIGHTS_BQUEENSIDE : CASTLING_RIGHTS_WQUEENSIDE)) {
-
-    //     if(attack_mask == 64)
-    //         attack_mask = generate_attack_mask(board, !side);
-
-    //     bindex_t start_pos = KING_CASTLING_POS[side][QUEENSIDE][0];
-    //     bindex_t end_pos = KING_CASTLING_POS[side][QUEENSIDE][1];
-    //     bool occ = CASTLING_OCC_MASK[side][QUEENSIDE] &
-    //     (board->sides_occ[side] | board->sides_occ[!side]); if(!(attack_mask
-    //     & CASTLING_ATTACK_MASK[side][QUEENSIDE]) && !occ)
-    //         add_move(moves, count, start_pos, end_pos, CASTLING);
-    // }
-    // 
-    generate_king_moves(board, side, moves, count);
-    generate_queen_moves(board, side, moves, count);
-    generate_bishop_moves(board, side, moves, count);
-    generate_knight_moves(board, side, moves, count);
-    generate_rook_moves(board, side, moves, count);
-    generate_pawn_moves(board, side, moves, count);
+    generate_king_moves(board, side, moves, count, only_nonquiet);
+    generate_queen_moves(board, side, moves, count, only_nonquiet);
+    generate_bishop_moves(board, side, moves, count, only_nonquiet);
+    generate_knight_moves(board, side, moves, count, only_nonquiet);
+    generate_rook_moves(board, side, moves, count, only_nonquiet);
+    generate_pawn_moves(board, side, moves, count, only_nonquiet);
 }
 
 // generate attacks FROM side

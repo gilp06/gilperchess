@@ -114,7 +114,7 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
                 move_t moves[256];
                 size_t count = 0;
                 generate_pseudolegal_moves(board, board->side_to_move, moves,
-                                           &count);
+                                           &count, false);
                 bool found = false;
 
                 for (int i = 0; i < count; i++) {

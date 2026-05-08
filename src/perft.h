@@ -18,7 +18,7 @@ static inline uint64_t perft(board_t *b, int depth) {
         return 1ULL;
     }
 
-    generate_pseudolegal_moves(b, b->side_to_move, moves, &move_count);
+    generate_pseudolegal_moves(b, b->side_to_move, moves, &move_count, false);
 
     if (depth == 1) {
         for (size_t i = 0; i < move_count; i++) {
@@ -57,7 +57,7 @@ static inline void perft_top(board_t *b, int depth) {
     uint64_t nodes = 0;
     uint64_t node_total = 0;
 
-    generate_pseudolegal_moves(b, b->side_to_move, moves, &move_count);
+    generate_pseudolegal_moves(b, b->side_to_move, moves, &move_count, false);
     for (int i = 0; i < move_count; i++) {
         dstate_t undo;
         if (perform_move(b, moves[i], &undo)) {

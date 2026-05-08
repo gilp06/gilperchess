@@ -51,4 +51,4 @@ move_t select_move(board_t* board, moveselect_t* move_select);
 
 void start_search(globalstate_t* gs, board_t* starting_board, int depth);
 int16_t alphabeta(sthreaddata_t* td, bool root, int16_t depth, int16_t alpha, int16_t beta, int16_t ply);
-int16_t qsearch(sthreaddata_t* td, int16_t alpha, int16_t beta);
+int16_t qsearch(sthreaddata_t* td, int16_t alpha, int16_t beta, int16_t ply);

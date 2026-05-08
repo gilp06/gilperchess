@@ -30,6 +30,7 @@ inline side_t otm(const board_t* board)
 
 
 bool in_check(board_t *board, side_t side);
+bool is_draw(board_t* board);
 
 // side being attacked
 static inline bool is_attacked(board_t* board, side_t side, bindex_t sq)

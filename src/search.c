@@ -5,17 +5,14 @@
 #include "eval.h"
 #include "hashtable.h"
 #include "move_gen.h"
+#include "pthread.h"
 #include "search.h"
 #include "types.h"
 #include "utils.h"
-#include "pthread.h"
 
 // move_t alphabeta_root(global_state_t* gs, board_t *board, int16_t depth);
 
-static void* search_thread(void *arg);
-
-
-
+static void *search_thread(void *arg);
 
 sthreaddata_t td[1];
 
@@ -26,13 +23,12 @@ void start_search(globalstate_t *gs, board_t *starting_board, int depth) {
 
     pthread_t thread;
 
-    for (int i = 1; i <= depth; i++)
-    {
+    for (int i = 1; i <= depth; i++) {
         memcpy(&td[0].board, starting_board, sizeof(board_t));
         td[0].gs = gs;
         td[0].depth = i;
-        
-        pthread_create(&thread, NULL, search_thread, (void*) &td);
+
+        pthread_create(&thread, NULL, search_thread, (void *)&td);
 
         // wait for thread to finish threading
         pthread_join(thread, NULL);
@@ -50,46 +46,31 @@ void start_search(globalstate_t *gs, board_t *starting_board, int depth) {
     // when done output bestmove
     char m[6];
     move_to_string(gs->best_move, m);
-    printf("bestmove %s\n",m);
+    printf("bestmove %s\n", m);
     fflush(stdout);
 }
 
+static void *search_thread(void *arg) {
+    sthreaddata_t *td = (sthreaddata_t *)arg;
 
-static void* search_thread(void *arg)
-{
-    sthreaddata_t *td = (sthreaddata_t*) arg;
+    td->score = alphabeta(td, true, td->depth, INT16_MIN + 1, INT16_MAX, 0);
 
-    td->score = alphabeta(td, true, td->depth, INT16_MIN+1, INT16_MAX, 0);
-    
     return NULL;
 }
 
-int16_t alphabeta(sthreaddata_t* td, bool root_node,
-                  int16_t depth, int16_t alpha, int16_t beta, int16_t ply) {
+int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
+                  int16_t alpha, int16_t beta, int16_t ply) {
 
-    globalstate_t* gs = td->gs;
-    board_t* board = &td->board;
+    globalstate_t *gs = td->gs;
+    board_t *board = &td->board;
 
     gs->nodes++;
 
     int16_t alpha_orig = alpha;
     int16_t tt_move = 0;
-    
 
-    if (!root_node) {
-        if (board->st.halfmove_clock == 100)
-            return 0;
-
-        int repetitions = 0;
-        for (int i = board->move_number - 2; i >= 0; i--) {
-            if (board->st.key == board->key_hist[i]) {
-                repetitions++;
-            }
-        }
-
-        if (repetitions >= 2) {
-            return -1000;
-        }
+    if (is_draw(board)) {
+        return 0 - ply * 100;
     }
 
     // check transposition table
@@ -107,7 +88,8 @@ int16_t alphabeta(sthreaddata_t* td, bool root_node,
     }
 
     if (depth == 0)
-        return evaluate(board);
+        // return evaluate(board);
+        return qsearch(td, alpha, beta, ply + 1);
 
     moveselect_t move_select;
     init_select(board, &move_select, tt_move, false);
@@ -119,7 +101,8 @@ int16_t alphabeta(sthreaddata_t* td, bool root_node,
 
     while (true) {
         move_t cur_move = select_move(board, &move_select);
-        if (cur_move == 0) break;
+        if (cur_move == 0)
+            break;
 
         dstate_t undo;
         if (!perform_move(board, cur_move, &undo)) {
@@ -147,7 +130,7 @@ int16_t alphabeta(sthreaddata_t* td, bool root_node,
 
     if (played == 0) {
         if (in_check(board, board->side_to_move))
-            return INT16_MIN + ply;
+            return INT16_MIN + ply + 1;
         else
             return 0;
     }
@@ -170,6 +153,68 @@ int16_t alphabeta(sthreaddata_t* td, bool root_node,
     return best_value;
 }
 
+int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
+
+    globalstate_t *gs = td->gs;
+    board_t *board = &td->board;
+
+    gs->nodes++;
+
+    if (is_draw(board))
+        return 0 - ply * 100;
+
+    int16_t best_val = INT16_MIN;
+
+    bool incheck = in_check(board, board->side_to_move);
+
+    if (!incheck) {
+        int16_t stand_eval = evaluate(board);
+        best_val = stand_eval;
+        if (best_val >= beta)
+            return best_val;
+        if (best_val > alpha)
+            alpha = best_val;
+    }
+
+    moveselect_t move_select;
+
+    int32_t played = 0;
+    init_select(&td->board, &move_select, 0, !incheck);
+
+    while (true) {
+        move_t cur_move = select_move(board, &move_select);
+        if (cur_move == 0)
+            break;
+        dstate_t undo;
+        if (!perform_move(board, cur_move, &undo)) {
+            // illegal move; try next
+            undo_move(board, &undo);
+            continue;
+        }
+
+        played++;
+
+        int16_t score = -qsearch(td, -beta, -alpha, ply + 1);
+        undo_move(board, &undo);
+        if (score >= beta) {
+            return score;
+        }
+        if (score > best_val) {
+            best_val = score;
+        }
+        if (score > alpha) {
+            alpha = score;
+        }
+    }
+
+    if (played == 0) {
+        if (incheck)
+            return INT16_MIN + 1 + ply;
+    }
+
+    return best_val;
+}
+
 static const uint8_t MVV_LVA[7][7] = {
     {15, 14, 13, 12, 11, 10, 0}, {25, 24, 23, 22, 21, 20, 0},
     {35, 34, 33, 32, 31, 30, 0}, {45, 44, 43, 42, 41, 40, 0},
@@ -190,7 +235,8 @@ void score_moves(board_t *board, moveselect_t *move_select) {
     }
 }
 
-void init_select(board_t *board, moveselect_t *move_select, move_t tt_move, bool nonquiet_only) {
+void init_select(board_t *board, moveselect_t *move_select, move_t tt_move,
+                 bool nonquiet_only) {
     move_select->phase = (tt_move != 0) ? TT_MOVE : GEN_MOVES;
     move_select->tt_move = tt_move;
     move_select->nonquiet_only = nonquiet_only;
@@ -231,7 +277,7 @@ move_t select_move(board_t *board, moveselect_t *ms) {
         // next case
     case GEN_MOVES:
         generate_pseudolegal_moves(board, board->side_to_move, ms->moves,
-                                   &ms->count);
+                                   &ms->count, ms->nonquiet_only);
         score_moves(board, ms);
         ms->phase = MOVES;
     case MOVES:

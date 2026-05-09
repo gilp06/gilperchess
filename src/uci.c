@@ -130,6 +130,10 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
                 if (set_param("movetime", tok, &last, &cur_search.movetime) ==
                     0)
                     continue;
+
+                if(set_param("movestogo", tok, &last, &cur_search.movestogo) == 0)
+                    continue;
+                
                 if ((res = set_param("perft", tok, &last, &perft_depth)) == 0 || res == -1) {
                     perft_top(board, perft_depth);
                     return false;

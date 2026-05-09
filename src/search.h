@@ -14,6 +14,7 @@ typedef struct s_searchsettings {
     uint64_t binc;
     uint64_t nodes;
     uint64_t depth;
+    uint64_t movestogo;
 } searchsettings_t;
 
 extern const searchsettings_t infinite_search;

@@ -18,21 +18,20 @@ const searchsettings_t infinite_search = {.movetime = 0,
                                           .winc = 0,
                                           .binc = 0,
                                           .nodes = 0,
-                                          .depth = 200};
+                                          .depth = 200,
+                                          .movestogo = 0};
 
 static void *search_thread(void *arg);
 
 sthreaddata_t td[1];
 #define THREAD_COUNT 1
 
-
-
 static bool all_threads_done() {
     bool done;
-    for (int i = 0; i < THREAD_COUNT; i++)
-    {
+    for (int i = 0; i < THREAD_COUNT; i++) {
         done = atomic_load(&td[i].done);
-        if (!done) return false;
+        if (!done)
+            return false;
     }
     return true;
 }
@@ -53,7 +52,18 @@ void start_search(globalstate_t *gs, board_t *starting_board,
     pthread_t thread;
 
     // TODO: better time control
-    uint64_t timelimit = search_settings.movetime;
+    uint64_t timelimit = 0;
+    if (search_settings.movetime != 0) {
+        timelimit = search_settings.movetime;
+    }
+    if (starting_board->side_to_move == SIDE_WHITE &&
+        search_settings.wtime != 0) {
+        timelimit = search_settings.btime / 20 + search_settings.binc / 2;
+    }
+    if (starting_board->side_to_move == SIDE_BLACK &&
+        search_settings.btime != 0) {
+        timelimit = search_settings.btime / 20 + search_settings.binc / 2;
+    }
 
     clock_gettime(CLOCK_MONOTONIC, &start_time);
 
@@ -72,13 +82,10 @@ void start_search(globalstate_t *gs, board_t *starting_board,
 
         pthread_create(&thread, NULL, search_thread, (void *)&td[0]);
 
-
-        
         while (!all_threads_done()) {
             clock_gettime(CLOCK_MONOTONIC, &end_time);
-            elapsed_ms =
-                (end_time.tv_sec - start_time.tv_sec) * 1000.0 +
-                (end_time.tv_nsec - start_time.tv_nsec) / 1000000.0;
+            elapsed_ms = (end_time.tv_sec - start_time.tv_sec) * 1000.0 +
+                         (end_time.tv_nsec - start_time.tv_nsec) / 1000000.0;
             if (search_settings.nodes != 0 &&
                 gs->nodes >= search_settings.nodes) {
                 atomic_store(&gs->stop, true);
@@ -86,8 +93,7 @@ void start_search(globalstate_t *gs, board_t *starting_board,
             }
 
             if (timelimit != 0) {
-                if (elapsed_ms >= timelimit)
-                {
+                if (elapsed_ms >= timelimit) {
                     atomic_store(&gs->stop, true);
                     break;
                 }
@@ -123,9 +129,10 @@ void start_search(globalstate_t *gs, board_t *starting_board,
         }
 
         clock_gettime(CLOCK_MONOTONIC, &end_time);
-        elapsed_ms =
-            (end_time.tv_sec - start_time.tv_sec) * 1000.0 +
-            (end_time.tv_nsec - start_time.tv_nsec) / 1000000.0;
+        elapsed_ms = (end_time.tv_sec - start_time.tv_sec) * 1000.0 +
+                     (end_time.tv_nsec - start_time.tv_nsec) / 1000000.0;
+        uint64_t nps =
+            (elapsed_ms > 0) ? (gs->nodes * 1000ULL) / elapsed_ms : 0;
 
         // retreive the score and the current best move
         cur_score = td[0].score;
@@ -133,8 +140,8 @@ void start_search(globalstate_t *gs, board_t *starting_board,
 
         // update current available best move and score
         gs->best_move = move;
-        printf("info nodes %llu depth %d score cp %d nps %lf time %llu\n", gs->nodes, i,
-               cur_score, (double) gs->nodes / elapsed_ms * 1000.0, elapsed_ms);
+        printf("info nodes %llu depth %d score cp %d nps %llu time %llu\n",
+               gs->nodes, i, cur_score, nps, elapsed_ms);
         fflush(stdout);
     }
 
@@ -211,7 +218,21 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
             continue;
         }
         played++;
-        value = -alphabeta(td, false, depth - 1, -beta, -alpha, ply + 1);
+
+
+
+        // value = -alphabeta(td, false, depth-1, -beta, -alpha, ply+1);
+        // sketchy PV node thing, assume that the TT move is PV node (its not)
+        if (played == 1) {
+            value = -alphabeta(td, false, depth-1, -beta, -alpha, ply+1);
+        } else {
+            value = -alphabeta(td, false, depth - 1, -alpha-1, -alpha, ply + 1);
+            if (alpha < value && value < beta) {
+                value = -alphabeta(td, false, depth-1, -beta, -alpha, ply+1);
+            }
+        }
+
+        
         if (value > best_value) {
             best_value = value;
             best_move = cur_move;
@@ -236,6 +257,14 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     }
 
     if (!root_node) {
+
+        bool stop = atomic_load(&gs->stop);
+        if (stop) {
+            return 0;
+        }
+        // if stopped, we don't want to write this value because its children
+        // are tainted.
+
         tt_entry_t entry;
         entry.depth = depth;
         entry.hash = board->st.key;

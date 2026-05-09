@@ -584,7 +584,7 @@ bool is_draw(board_t *board) {
             repetitions++;
         }
     }
-    if (repetitions >= 2)
-        printf("repetitions: %d\n", repetitions);
+    // if (repetitions >= 2)
+    //     printf("repetitions: %d\n", repetitions);
     return repetitions >= 2;
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <time.h>
 
 #include "types.h"
 
@@ -50,6 +51,15 @@ bb_t get_edge_filter(bindex_t sq);
 
 void print_bb(bb_t bboard);
 void print_pieces(piece_t *board);
+
+static inline double get_real_time() {
+    struct timeval tv;
+    double secsInMilli, usecsInMilli;
+    mingw_gettimeofday(&tv, NULL);
+    secsInMilli = ((double)tv.tv_sec) * 1000.0;
+    usecsInMilli = tv.tv_usec / 1000.0;
+    return secsInMilli + usecsInMilli;
+}
 
 static inline void move_to_string(move_t m, char f[6]) {
     bindex_t from = move_from(m);

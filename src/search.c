@@ -1,3 +1,4 @@
+#include <setjmp.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -11,6 +12,8 @@
 #include "utils.h"
 
 // move_t alphabeta_root(global_state_t* gs, board_t *board, int16_t depth);
+//
+//
 
 const searchsettings_t infinite_search = {.movetime = 0,
                                           .wtime = 0,
@@ -36,11 +39,21 @@ static bool all_threads_done() {
     return true;
 }
 
+void *go_search(void *arg) {
+    gosearchdata_t *search_data = (gosearchdata_t *)arg;
+    board_t *starting_board = search_data->starting_board;
+    searchsettings_t search_settings = search_data->search_settings;
+    globalstate_t *gs = search_data->gs;
+
+    start_search(gs, starting_board, search_settings);
+    return NULL;
+}
+
 void start_search(globalstate_t *gs, board_t *starting_board,
                   searchsettings_t search_settings) {
 
-    struct timespec start_time, end_time;
-    uint64_t elapsed_ms;
+    double start_time;
+    double elapsed_ms;
 
     gs->best_move = 0;
     gs->nodes = 0;
@@ -58,14 +71,15 @@ void start_search(globalstate_t *gs, board_t *starting_board,
     }
     if (starting_board->side_to_move == SIDE_WHITE &&
         search_settings.wtime != 0) {
-        timelimit = search_settings.btime / 20 + search_settings.binc / 2;
+        timelimit = search_settings.wtime / 20 + search_settings.winc / 2;
     }
     if (starting_board->side_to_move == SIDE_BLACK &&
         search_settings.btime != 0) {
         timelimit = search_settings.btime / 20 + search_settings.binc / 2;
     }
+    timelimit = timelimit > 5 ? timelimit-5 : 0;
 
-    clock_gettime(CLOCK_MONOTONIC, &start_time);
+    start_time = get_real_time();
 
     for (int i = 1; i <= search_settings.depth; i++) {
         memcpy(&td[0].board, starting_board, sizeof(board_t));
@@ -82,10 +96,8 @@ void start_search(globalstate_t *gs, board_t *starting_board,
 
         pthread_create(&thread, NULL, search_thread, (void *)&td[0]);
 
-        while (!all_threads_done()) {
-            clock_gettime(CLOCK_MONOTONIC, &end_time);
-            elapsed_ms = (end_time.tv_sec - start_time.tv_sec) * 1000.0 +
-                         (end_time.tv_nsec - start_time.tv_nsec) / 1000000.0;
+        while (!all_threads_done() && !atomic_load(&gs->stop)) {
+            elapsed_ms = get_real_time() - start_time;
             if (search_settings.nodes != 0 &&
                 gs->nodes >= search_settings.nodes) {
                 atomic_store(&gs->stop, true);
@@ -102,7 +114,7 @@ void start_search(globalstate_t *gs, board_t *starting_board,
 
         pthread_join(thread, NULL);
 
-        if (gs->stop)
+        if (atomic_load(&gs->stop))
             break;
 
         if (i > 5) {
@@ -118,19 +130,37 @@ void start_search(globalstate_t *gs, board_t *starting_board,
             }
             if (fail) {
                 // restart search without aspiration
-                printf("missed aspiration\n");
+                // printf("missed aspiration\n");
                 memcpy(&td[0].board, starting_board, sizeof(board_t));
                 td[0].gs = gs;
                 td[0].depth = i;
                 pthread_create(&thread, NULL, search_thread, (void *)&td[0]);
                 // wait for thread to finish threading
+                while (!all_threads_done() && !atomic_load(&gs->stop)) {
+                    elapsed_ms = get_real_time() - start_time;
+                    if (search_settings.nodes != 0 &&
+                        gs->nodes >= search_settings.nodes) {
+                        atomic_store(&gs->stop, true);
+                        break;
+                    }
+
+                    if (timelimit != 0) {
+                        if (elapsed_ms >= timelimit) {
+                            atomic_store(&gs->stop, true);
+                            break;
+                        }
+                    }
+                }
                 pthread_join(thread, NULL);
             }
         }
 
-        clock_gettime(CLOCK_MONOTONIC, &end_time);
-        elapsed_ms = (end_time.tv_sec - start_time.tv_sec) * 1000.0 +
-                     (end_time.tv_nsec - start_time.tv_nsec) / 1000000.0;
+        
+        if (atomic_load(&gs->stop))
+            break;
+
+
+        elapsed_ms = get_real_time() - start_time;
         uint64_t nps =
             (elapsed_ms > 0) ? (gs->nodes * 1000ULL) / elapsed_ms : 0;
 
@@ -141,11 +171,15 @@ void start_search(globalstate_t *gs, board_t *starting_board,
         // update current available best move and score
         gs->best_move = move;
         printf("info nodes %llu depth %d score cp %d nps %llu time %llu\n",
-               gs->nodes, i, cur_score, nps, elapsed_ms);
+               gs->nodes, i, cur_score, nps, (uint64_t)elapsed_ms);
         fflush(stdout);
     }
 
-    // when done output bestmove
+
+    elapsed_ms = get_real_time() - start_time;
+
+    // printf("info nodes %llu time %llu\n", gs->nodes, (uint64_t)elapsed_ms);
+
     char m[6];
     move_to_string(gs->best_move, m);
     printf("bestmove %s\n", m);
@@ -155,6 +189,12 @@ void start_search(globalstate_t *gs, board_t *starting_board,
 static void *search_thread(void *arg) {
     sthreaddata_t *td = (sthreaddata_t *)arg;
     globalstate_t *gs = td->gs;
+
+    if (setjmp(td[0].jmp)) {
+        fflush(stdout);
+        atomic_store(&td->done, true);
+        return NULL;
+    };
 
     td->score = alphabeta(td, true, td->depth, gs->alpha, gs->beta, 0);
 
@@ -168,9 +208,9 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     globalstate_t *gs = td->gs;
     board_t *board = &td->board;
 
-    bool stop = atomic_load(&gs->stop);
-    if (stop) {
-        return 0;
+    // bool stop = atomic_load(&gs->stop);
+    if (atomic_load(&gs->stop)) {
+        longjmp(td->jmp, 1);
     }
 
     gs->nodes++;
@@ -207,6 +247,10 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     int16_t value;
 
     while (true) {
+
+        if (atomic_load(&gs->stop))
+            longjmp(td->jmp, 1);
+        
         move_t cur_move = select_move(board, &move_select);
         if (cur_move == 0)
             break;
@@ -219,20 +263,20 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
         }
         played++;
 
-
-
         // value = -alphabeta(td, false, depth-1, -beta, -alpha, ply+1);
-        // sketchy PV node thing, assume that the TT move is PV node (its not)
+        // sketchy PV node thing, assume that the first move is PV node (its
+        // not)
         if (played == 1) {
-            value = -alphabeta(td, false, depth-1, -beta, -alpha, ply+1);
+            value = -alphabeta(td, false, depth - 1, -beta, -alpha, ply + 1);
         } else {
-            value = -alphabeta(td, false, depth - 1, -alpha-1, -alpha, ply + 1);
+            value =
+                -alphabeta(td, false, depth - 1, -alpha - 1, -alpha, ply + 1);
             if (alpha < value && value < beta) {
-                value = -alphabeta(td, false, depth-1, -beta, -alpha, ply+1);
+                value =
+                    -alphabeta(td, false, depth - 1, -beta, -alpha, ply + 1);
             }
         }
 
-        
         if (value > best_value) {
             best_value = value;
             best_move = cur_move;
@@ -258,10 +302,7 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
 
     if (!root_node) {
 
-        bool stop = atomic_load(&gs->stop);
-        if (stop) {
-            return 0;
-        }
+        // bool stop = atomic_load(&gs->stop);
         // if stopped, we don't want to write this value because its children
         // are tainted.
 
@@ -287,9 +328,9 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
     globalstate_t *gs = td->gs;
     board_t *board = &td->board;
 
-    bool stop = atomic_load(&gs->stop);
-    if (stop) {
-        return 0;
+    // bool stop = atomic_load(&gs->stop);
+    if (atomic_load(&gs->stop)) {
+        longjmp(td->jmp, 1);
     }
 
     gs->nodes++;
@@ -316,6 +357,10 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
     init_select(&td->board, &move_select, 0, !incheck);
 
     while (true) {
+
+        if (atomic_load(&gs->stop))
+            longjmp(td->jmp, 1);
+        
         move_t cur_move = select_move(board, &move_select);
         if (cur_move == 0)
             break;
@@ -339,6 +384,10 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
         if (score > alpha) {
             alpha = score;
         }
+    }
+
+    if (gs->stop) {
+        return 0;
     }
 
     if (played == 0) {

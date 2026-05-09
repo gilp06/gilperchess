@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <pthread.h>
 #include <string.h>
 
 #include "board.h"
@@ -12,6 +13,9 @@
 #include "search.h"
 #include "types.h"
 #include "uci.h"
+
+pthread_t main_search_thread;
+gosearchdata_t search_data;
 
 // returns 0 if wrong type, 1 if successful, -1 if invalid input
 static int set_param(const char *cmp_str, char *tok, char **last,
@@ -58,6 +62,8 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
             command = COMMAND_QUIT;
         } else if (strcmp(tok, "ucinewgame") == 0) {
             command = COMMAND_UCINEWGAME;
+        } else if (strcmp(tok, "stop") == 0) {
+            command = COMMAND_STOP;
         }
 
         switch (command) {
@@ -144,8 +150,18 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
             }
 
             // start search here and enter search loop
-            start_search(gs, board, cur_search);
+            search_data.search_settings = cur_search;
+            search_data.starting_board = board;
+            search_data.gs = gs;
+
+            pthread_create(&main_search_thread, NULL, &go_search, (void*)&search_data);
+            pthread_detach(main_search_thread);
             
+            return false;
+        }
+
+        case COMMAND_STOP: {
+            atomic_store(&gs->stop, true);        
             return false;
         }
 

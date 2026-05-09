@@ -1,10 +1,11 @@
 #pragma once
 
 #include <stdatomic.h>
+#include <setjmp.h>
 
-#include "types.h"
 #include "board.h"
 #include "hashtable.h"
+#include "types.h"
 
 typedef struct s_searchsettings {
     uint64_t movetime;
@@ -16,7 +17,6 @@ typedef struct s_searchsettings {
     uint64_t depth;
     uint64_t movestogo;
 } searchsettings_t;
-
 extern const searchsettings_t infinite_search;
 
 typedef struct s_globalstate {
@@ -31,26 +31,26 @@ typedef struct s_globalstate {
     atomic_bool stop;
 } globalstate_t;
 
+typedef struct s_gosearchdata {
+    searchsettings_t search_settings;
+    globalstate_t *gs;
+    board_t *starting_board;
+} gosearchdata_t;
+
 typedef struct s_sthreaddata {
     globalstate_t *gs;
+    searchsettings_t *settings; // our limits
     board_t board;
     int16_t depth;
-
 
     move_t best_move;
     int16_t score;
     atomic_bool done;
+
+    jmp_buf jmp;
 } sthreaddata_t;
 
-
-typedef enum e_selectphase
-{
-    TT_MOVE,
-    GEN_MOVES,
-    MOVES,
-    DONE
-} selectphase_t;
-
+typedef enum e_selectphase { TT_MOVE, GEN_MOVES, MOVES, DONE } selectphase_t;
 
 typedef struct s_moveselect {
     move_t moves[256];
@@ -61,11 +61,14 @@ typedef struct s_moveselect {
     bool nonquiet_only;
 } moveselect_t;
 
+void init_select(board_t *board, moveselect_t *move_select, move_t tt_move,
+                 bool nonquiet_only);
+move_t select_move(board_t *board, moveselect_t *move_select);
 
-void init_select(board_t* board, moveselect_t* move_select, move_t tt_move, bool nonquiet_only);
-move_t select_move(board_t* board, moveselect_t* move_select);
-
-
-void start_search(globalstate_t* gs, board_t* starting_board, searchsettings_t search_settings);
-int16_t alphabeta(sthreaddata_t* td, bool root, int16_t depth, int16_t alpha, int16_t beta, int16_t ply);
-int16_t qsearch(sthreaddata_t* td, int16_t alpha, int16_t beta, int16_t ply);
+void *go_search(void *arg);
+void *iterative_search(void *arg);
+void start_search(globalstate_t *gs, board_t *starting_board,
+                  searchsettings_t search_settings);
+int16_t alphabeta(sthreaddata_t *td, bool root, int16_t depth, int16_t alpha,
+                  int16_t beta, int16_t ply);
+int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply);

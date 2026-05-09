@@ -555,6 +555,7 @@ void undo_move(board_t *board, dstate_t *undo) {
     undo_handlers[mt >> 14](board, undo);
 
     board->move_number--;
+    board->key_hist[board->move_number] = 0;
     board->side_to_move = !board->side_to_move;
 }
 

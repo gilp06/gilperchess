@@ -12,34 +12,129 @@
 
 // move_t alphabeta_root(global_state_t* gs, board_t *board, int16_t depth);
 
+const searchsettings_t infinite_search = {.movetime = 0,
+                                          .wtime = 0,
+                                          .btime = 0,
+                                          .winc = 0,
+                                          .binc = 0,
+                                          .nodes = 0,
+                                          .depth = 200};
+
 static void *search_thread(void *arg);
 
 sthreaddata_t td[1];
+#define THREAD_COUNT 1
 
-void start_search(globalstate_t *gs, board_t *starting_board, int depth) {
+
+
+static bool all_threads_done() {
+    bool done;
+    for (int i = 0; i < THREAD_COUNT; i++)
+    {
+        done = atomic_load(&td[i].done);
+        if (!done) return false;
+    }
+    return true;
+}
+
+void start_search(globalstate_t *gs, board_t *starting_board,
+                  searchsettings_t search_settings) {
+
+    struct timespec start_time, end_time;
+    uint64_t elapsed_ms;
 
     gs->best_move = 0;
     gs->nodes = 0;
+    gs->alpha = -INT16_MAX;
+    gs->beta = INT16_MAX;
+    gs->stop = false;
 
+    int16_t cur_score;
     pthread_t thread;
 
-    for (int i = 1; i <= depth; i++) {
+    // TODO: better time control
+    uint64_t timelimit = search_settings.movetime;
+
+    clock_gettime(CLOCK_MONOTONIC, &start_time);
+
+    for (int i = 1; i <= search_settings.depth; i++) {
         memcpy(&td[0].board, starting_board, sizeof(board_t));
         td[0].gs = gs;
         td[0].depth = i;
+        td[0].done = false;
 
-        pthread_create(&thread, NULL, search_thread, (void *)&td);
+        if (i > 5) {
+            // guess
+            int16_t delta = 60 + i * 2;
+            gs->alpha = cur_score - delta;
+            gs->beta = cur_score + delta;
+        }
 
-        // wait for thread to finish threading
+        pthread_create(&thread, NULL, search_thread, (void *)&td[0]);
+
+
+        
+        while (!all_threads_done()) {
+            clock_gettime(CLOCK_MONOTONIC, &end_time);
+            elapsed_ms =
+                (end_time.tv_sec - start_time.tv_sec) * 1000.0 +
+                (end_time.tv_nsec - start_time.tv_nsec) / 1000000.0;
+            if (search_settings.nodes != 0 &&
+                gs->nodes >= search_settings.nodes) {
+                atomic_store(&gs->stop, true);
+                break;
+            }
+
+            if (timelimit != 0) {
+                if (elapsed_ms >= timelimit)
+                {
+                    atomic_store(&gs->stop, true);
+                    break;
+                }
+            }
+        }
+
         pthread_join(thread, NULL);
 
+        if (gs->stop)
+            break;
+
+        if (i > 5) {
+            // check if we failed aspiration
+            int16_t score = td[0].score;
+            bool fail = false;
+            if (score <= gs->alpha) {
+                gs->alpha = -INT16_MAX;
+                fail = true;
+            } else if (score >= gs->beta) {
+                gs->beta = INT16_MAX;
+                fail = true;
+            }
+            if (fail) {
+                // restart search without aspiration
+                printf("missed aspiration\n");
+                memcpy(&td[0].board, starting_board, sizeof(board_t));
+                td[0].gs = gs;
+                td[0].depth = i;
+                pthread_create(&thread, NULL, search_thread, (void *)&td[0]);
+                // wait for thread to finish threading
+                pthread_join(thread, NULL);
+            }
+        }
+
+        clock_gettime(CLOCK_MONOTONIC, &end_time);
+        elapsed_ms =
+            (end_time.tv_sec - start_time.tv_sec) * 1000.0 +
+            (end_time.tv_nsec - start_time.tv_nsec) / 1000000.0;
+
         // retreive the score and the current best move
-        int16_t score = td[0].score;
+        cur_score = td[0].score;
         move_t move = td[0].best_move;
 
         // update current available best move and score
         gs->best_move = move;
-        printf("info nodes %llu depth %d score cp %d\n", gs->nodes, i, score);
+        printf("info nodes %llu depth %d score cp %d nps %lf time %llu\n", gs->nodes, i,
+               cur_score, (double) gs->nodes / elapsed_ms * 1000.0, elapsed_ms);
         fflush(stdout);
     }
 
@@ -52,9 +147,11 @@ void start_search(globalstate_t *gs, board_t *starting_board, int depth) {
 
 static void *search_thread(void *arg) {
     sthreaddata_t *td = (sthreaddata_t *)arg;
+    globalstate_t *gs = td->gs;
 
-    td->score = alphabeta(td, true, td->depth, INT16_MIN + 1, INT16_MAX, 0);
+    td->score = alphabeta(td, true, td->depth, gs->alpha, gs->beta, 0);
 
+    atomic_store(&td->done, true);
     return NULL;
 }
 
@@ -64,13 +161,18 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     globalstate_t *gs = td->gs;
     board_t *board = &td->board;
 
+    bool stop = atomic_load(&gs->stop);
+    if (stop) {
+        return 0;
+    }
+
     gs->nodes++;
 
     int16_t alpha_orig = alpha;
     int16_t tt_move = 0;
 
     if (is_draw(board)) {
-        return 0 - ply * 100;
+        return 0;
     }
 
     // check transposition table
@@ -78,11 +180,9 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     if (entry.flag != INVALID && entry.hash == board->st.key) {
 
         if (entry.depth >= depth) {
-            if (entry.flag == EXACT ||
-                (entry.flag == LOWERBOUND && entry.value >= beta) ||
-                (entry.flag == UPPERBOUND && entry.value <= alpha)) {
-                return entry.value;
-            }
+            // if (entry.flag == EXACT) {
+            //     return entry.value;
+            // }
         }
         tt_move = entry.bestmove;
     }
@@ -158,10 +258,15 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
     globalstate_t *gs = td->gs;
     board_t *board = &td->board;
 
+    bool stop = atomic_load(&gs->stop);
+    if (stop) {
+        return 0;
+    }
+
     gs->nodes++;
 
     if (is_draw(board))
-        return 0 - ply * 100;
+        return 0;
 
     int16_t best_val = INT16_MIN;
 

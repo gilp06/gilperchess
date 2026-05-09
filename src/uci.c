@@ -1,4 +1,5 @@
 
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,6 +12,28 @@
 #include "search.h"
 #include "types.h"
 #include "uci.h"
+
+// returns 0 if wrong type, 1 if successful, -1 if invalid input
+static int set_param(const char *cmp_str, char *tok, char **last,
+                     uint64_t *val) {
+    uint64_t v = 0;
+    if (strcmp(tok, cmp_str) == 0) {
+        // read next for value
+        tok = strtok_r(NULL, " \n", last);
+        if (tok == NULL) {
+            return -1;
+        }
+        v = atoi(tok);
+        if (v <= 0) {
+            return -2;
+        }
+        *val = v;
+    } else {
+        return -3;
+    }
+
+    return 0;
+}
 
 bool uci_loop(globalstate_t *gs, board_t *board) {
     char input[10000];
@@ -54,27 +77,74 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
         }
         case COMMAND_UCINEWGAME: {
             clear_ttable(&gs->transposition_table);
-            return false;        
-        }
-        case COMMAND_GO: {
-            tok = strtok_r(NULL, " \n", &last);
-            if (tok != NULL && strcmp(tok, "perft") == 0) {
-                tok = strtok_r(NULL, " \n", &last);
-                int depth = atoi(tok);
-                if (depth > 0) {
-                    perft_top(board, depth);
-                } else {
-                    printf("invalid depth argument!\n");
-                    fflush(stdout);
-                    return false;
-                }
-            }
-            else
-            {
-                start_search(gs, board, 7);
-            }
             return false;
         }
+        case COMMAND_GO: {
+            // tok = strtok_r(NULL, " \n", &last);
+            // if (tok != NULL && strcmp(tok, "perft") == 0) {
+            //     tok = strtok_r(NULL, " \n", &last);
+            //     int depth = atoi(tok);
+            //     if (depth > 0) {
+            //         perft_top(board, depth);
+            //     } else {
+            //         printf("invalid depth argument!\n");
+            //         fflush(stdout);
+            //         return false;
+            //     }
+            // }
+            // else
+            // {
+            //     start_search(gs, board, 7);
+            // }
+
+            searchsettings_t cur_search = infinite_search;
+            uint64_t perft_depth = 1;
+            int res;
+
+            while ((tok = strtok_r(NULL, " \n",
+                                   &last))) // keep fetching while valid
+            {
+                if (strcmp(tok, "infinite") == 0) {
+                    cur_search = infinite_search;
+                    break;
+                }
+
+                if (set_param("depth", tok, &last, &cur_search.depth) == 0)
+                    continue;
+
+                if (set_param("wtime", tok, &last, &cur_search.wtime) == 0)
+                    continue;
+
+                if (set_param("btime", tok, &last, &cur_search.btime) == 0)
+                    continue;
+
+                if (set_param("winc", tok, &last, &cur_search.winc) == 0)
+                    continue;
+
+                if (set_param("binc", tok, &last, &cur_search.binc) == 0)
+                    continue;
+
+                if (set_param("nodes", tok, &last, &cur_search.nodes) == 0)
+                    continue;
+
+                if (set_param("movetime", tok, &last, &cur_search.movetime) ==
+                    0)
+                    continue;
+                if ((res = set_param("perft", tok, &last, &perft_depth)) == 0 || res == -1) {
+                    perft_top(board, perft_depth);
+                    return false;
+                }
+                printf("failed to read token correctly, stopping\n");
+                fflush(stdout);
+                return false;
+            }
+
+            // start search here and enter search loop
+            start_search(gs, board, cur_search);
+            
+            return false;
+        }
+
         case COMMAND_POSITION: {
             tok = strtok_r(NULL, " \n", &last);
             if (tok == NULL) {
@@ -158,7 +228,8 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
                 if (cr & CASTLING_RIGHTS_BQUEENSIDE)
                     printf("q");
                 printf("\n");
-                printf("halfmove: %d, fullmove: %d\n", board->st.halfmove_clock, board->st.fullmove_clock);
+                printf("halfmove: %d, fullmove: %d\n", board->st.halfmove_clock,
+                       board->st.fullmove_clock);
             }
             return false;
         }

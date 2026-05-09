@@ -7,6 +7,8 @@
 #include "hashtable.h"
 #include "types.h"
 
+extern bool ABORT_SIGNAL;
+
 typedef struct s_searchsettings {
     uint64_t movetime;
     uint64_t wtime;

@@ -15,6 +15,11 @@
 //
 //
 
+
+
+bool ABORT_SIGNAL = 1;
+
+
 const searchsettings_t infinite_search = {.movetime = 0,
                                           .wtime = 0,
                                           .btime = 0,
@@ -59,8 +64,9 @@ void start_search(globalstate_t *gs, board_t *starting_board,
     gs->nodes = 0;
     gs->alpha = -INT16_MAX;
     gs->beta = INT16_MAX;
-    gs->stop = false;
 
+    ABORT_SIGNAL = 0;
+    
     int16_t cur_score;
     pthread_t thread;
 
@@ -96,17 +102,17 @@ void start_search(globalstate_t *gs, board_t *starting_board,
 
         pthread_create(&thread, NULL, search_thread, (void *)&td[0]);
 
-        while (!all_threads_done() && !atomic_load(&gs->stop)) {
+        while (!all_threads_done() && !ABORT_SIGNAL) {
             elapsed_ms = get_real_time() - start_time;
             if (search_settings.nodes != 0 &&
                 gs->nodes >= search_settings.nodes) {
-                atomic_store(&gs->stop, true);
+                ABORT_SIGNAL = 1;
                 break;
             }
 
             if (timelimit != 0) {
                 if (elapsed_ms >= timelimit) {
-                    atomic_store(&gs->stop, true);
+                    ABORT_SIGNAL = 1;
                     break;
                 }
             }
@@ -114,50 +120,50 @@ void start_search(globalstate_t *gs, board_t *starting_board,
 
         pthread_join(thread, NULL);
 
-        if (atomic_load(&gs->stop))
+        if (ABORT_SIGNAL)
             break;
 
-        if (i > 5) {
-            // check if we failed aspiration
-            int16_t score = td[0].score;
-            bool fail = false;
-            if (score <= gs->alpha) {
-                gs->alpha = -INT16_MAX;
-                fail = true;
-            } else if (score >= gs->beta) {
-                gs->beta = INT16_MAX;
-                fail = true;
-            }
-            if (fail) {
-                // restart search without aspiration
-                // printf("missed aspiration\n");
-                memcpy(&td[0].board, starting_board, sizeof(board_t));
-                td[0].gs = gs;
-                td[0].depth = i;
-                pthread_create(&thread, NULL, search_thread, (void *)&td[0]);
-                // wait for thread to finish threading
-                while (!all_threads_done() && !atomic_load(&gs->stop)) {
-                    elapsed_ms = get_real_time() - start_time;
-                    if (search_settings.nodes != 0 &&
-                        gs->nodes >= search_settings.nodes) {
-                        atomic_store(&gs->stop, true);
-                        break;
-                    }
+        // if (i > 5) {
+        //     // check if we failed aspiration
+        //     int16_t score = td[0].score;
+        //     bool fail = false;
+        //     if (score <= gs->alpha) {
+        //         gs->alpha = -INT16_MAX;
+        //         fail = true;
+        //     } else if (score >= gs->beta) {
+        //         gs->beta = INT16_MAX;
+        //         fail = true;
+        //     }
+        //     if (fail) {
+        //         // restart search without aspiration
+        //         // printf("missed aspiration\n");
+        //         memcpy(&td[0].board, starting_board, sizeof(board_t));
+        //         td[0].gs = gs;
+        //         td[0].depth = i;
+        //         pthread_create(&thread, NULL, search_thread, (void *)&td[0]);
+        //         // wait for thread to finish threading
+        //         while (!all_threads_done() && !atomic_load(&gs->stop)) {
+        //             elapsed_ms = get_real_time() - start_time;
+        //             if (search_settings.nodes != 0 &&
+        //                 gs->nodes >= search_settings.nodes) {
+        //                 atomic_store(&gs->stop, true);
+        //                 break;
+        //             }
 
-                    if (timelimit != 0) {
-                        if (elapsed_ms >= timelimit) {
-                            atomic_store(&gs->stop, true);
-                            break;
-                        }
-                    }
-                }
-                pthread_join(thread, NULL);
-            }
-        }
+        //             if (timelimit != 0) {
+        //                 if (elapsed_ms >= timelimit) {
+        //                     atomic_store(&gs->stop, true);
+        //                     break;
+        //                 }
+        //             }
+        //         }
+        //         pthread_join(thread, NULL);
+        //     }
+        // }
 
         
-        if (atomic_load(&gs->stop))
-            break;
+        // if (atomic_load(&gs->stop))
+        //     break;
 
 
         elapsed_ms = get_real_time() - start_time;
@@ -178,7 +184,7 @@ void start_search(globalstate_t *gs, board_t *starting_board,
 
     elapsed_ms = get_real_time() - start_time;
 
-    // printf("info nodes %llu time %llu\n", gs->nodes, (uint64_t)elapsed_ms);
+    printf("info nodes %llu time %llu\n", gs->nodes, (uint64_t)elapsed_ms);
 
     char m[6];
     move_to_string(gs->best_move, m);
@@ -192,13 +198,13 @@ static void *search_thread(void *arg) {
 
     if (setjmp(td[0].jmp)) {
         fflush(stdout);
-        atomic_store(&td->done, true);
+        td->done = 1;
         return NULL;
     };
 
     td->score = alphabeta(td, true, td->depth, gs->alpha, gs->beta, 0);
 
-    atomic_store(&td->done, true);
+    td->done = 1;
     return NULL;
 }
 
@@ -209,7 +215,7 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     board_t *board = &td->board;
 
     // bool stop = atomic_load(&gs->stop);
-    if (atomic_load(&gs->stop)) {
+    if (ABORT_SIGNAL) {
         longjmp(td->jmp, 1);
     }
 
@@ -247,10 +253,6 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     int16_t value;
 
     while (true) {
-
-        if (atomic_load(&gs->stop))
-            longjmp(td->jmp, 1);
-        
         move_t cur_move = select_move(board, &move_select);
         if (cur_move == 0)
             break;
@@ -329,7 +331,7 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
     board_t *board = &td->board;
 
     // bool stop = atomic_load(&gs->stop);
-    if (atomic_load(&gs->stop)) {
+    if (ABORT_SIGNAL) {
         longjmp(td->jmp, 1);
     }
 
@@ -358,8 +360,8 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
 
     while (true) {
 
-        if (atomic_load(&gs->stop))
-            longjmp(td->jmp, 1);
+        // if (atomic_load(&gs->stop))
+        //     longjmp(td->jmp, 1);
         
         move_t cur_move = select_move(board, &move_select);
         if (cur_move == 0)

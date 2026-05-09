@@ -161,7 +161,7 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
         }
 
         case COMMAND_STOP: {
-            atomic_store(&gs->stop, true);        
+            ABORT_SIGNAL = 1;
             return false;
         }
 

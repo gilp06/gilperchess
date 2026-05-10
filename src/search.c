@@ -12,12 +12,8 @@
 #include "utils.h"
 
 // move_t alphabeta_root(global_state_t* gs, board_t *board, int16_t depth);
-//
-//
 
-
-
-bool ABORT_SIGNAL = 1;
+volatile bool ABORT_SIGNAL = 1;
 
 
 const searchsettings_t infinite_search = {.movetime = 0,
@@ -30,6 +26,21 @@ const searchsettings_t infinite_search = {.movetime = 0,
                                           .movestogo = 0};
 
 static void *search_thread(void *arg);
+
+static bool should_abort_thread(sthreaddata_t* td)
+{
+    double cur_time = get_real_time();
+
+    if (td->gs->time_limit != 0 && (double)(cur_time - td->gs->start_time) >= td->gs->time_limit)
+    {
+        return true;
+    }
+    if (td->ss->nodes != 0 && td->gs->nodes >= td->ss->nodes)
+    {
+        return true;
+    }
+    return false;
+}
 
 sthreaddata_t td[1];
 #define THREAD_COUNT 1
@@ -57,7 +68,6 @@ void *go_search(void *arg) {
 void start_search(globalstate_t *gs, board_t *starting_board,
                   searchsettings_t search_settings) {
 
-    double start_time;
     double elapsed_ms;
 
     gs->best_move = 0;
@@ -83,13 +93,16 @@ void start_search(globalstate_t *gs, board_t *starting_board,
         search_settings.btime != 0) {
         timelimit = search_settings.btime / 20 + search_settings.binc / 2;
     }
-    timelimit = timelimit > 5 ? timelimit-5 : 0;
 
-    start_time = get_real_time();
+    timelimit = timelimit > 1 ? timelimit-1 : 0;
+
+    gs->start_time = get_real_time();
+    gs->time_limit = timelimit;
 
     for (int i = 1; i <= search_settings.depth; i++) {
         memcpy(&td[0].board, starting_board, sizeof(board_t));
         td[0].gs = gs;
+        td[0].ss = &search_settings;
         td[0].depth = i;
         td[0].done = false;
 
@@ -102,21 +115,21 @@ void start_search(globalstate_t *gs, board_t *starting_board,
 
         pthread_create(&thread, NULL, search_thread, (void *)&td[0]);
 
-        while (!all_threads_done() && !ABORT_SIGNAL) {
-            elapsed_ms = get_real_time() - start_time;
-            if (search_settings.nodes != 0 &&
-                gs->nodes >= search_settings.nodes) {
-                ABORT_SIGNAL = 1;
-                break;
-            }
+        // while (!all_threads_done() && !ABORT_SIGNAL) {
+        //     elapsed_ms = get_real_time() - gs->start_time;
+        //     if (search_settings.nodes != 0 &&
+        //         gs->nodes >= search_settings.nodes) {
+        //         ABORT_SIGNAL = 1;
+        //         break;
+        //     }
 
-            if (timelimit != 0) {
-                if (elapsed_ms >= timelimit) {
-                    ABORT_SIGNAL = 1;
-                    break;
-                }
-            }
-        }
+        //     if (timelimit != 0) {
+        //         if (elapsed_ms >= timelimit) {
+        //             ABORT_SIGNAL = 1;
+        //             break;
+        //         }
+        //     }
+        // }
 
         pthread_join(thread, NULL);
 
@@ -142,17 +155,17 @@ void start_search(globalstate_t *gs, board_t *starting_board,
         //         td[0].depth = i;
         //         pthread_create(&thread, NULL, search_thread, (void *)&td[0]);
         //         // wait for thread to finish threading
-        //         while (!all_threads_done() && !atomic_load(&gs->stop)) {
+        //         while (!all_threads_done() && !ABORT_SIGNAL) {
         //             elapsed_ms = get_real_time() - start_time;
         //             if (search_settings.nodes != 0 &&
         //                 gs->nodes >= search_settings.nodes) {
-        //                 atomic_store(&gs->stop, true);
+        //                 ABORT_SIGNAL = 1;
         //                 break;
         //             }
 
         //             if (timelimit != 0) {
         //                 if (elapsed_ms >= timelimit) {
-        //                     atomic_store(&gs->stop, true);
+        //                     ABORT_SIGNAL = 1;
         //                     break;
         //                 }
         //             }
@@ -162,11 +175,11 @@ void start_search(globalstate_t *gs, board_t *starting_board,
         // }
 
         
-        // if (atomic_load(&gs->stop))
+        // if (ABORT_SIGNAL)
         //     break;
 
 
-        elapsed_ms = get_real_time() - start_time;
+        elapsed_ms = get_real_time() - gs->start_time;
         uint64_t nps =
             (elapsed_ms > 0) ? (gs->nodes * 1000ULL) / elapsed_ms : 0;
 
@@ -182,7 +195,7 @@ void start_search(globalstate_t *gs, board_t *starting_board,
     }
 
 
-    elapsed_ms = get_real_time() - start_time;
+    elapsed_ms = get_real_time() - gs->start_time;
 
     printf("info nodes %llu time %llu\n", gs->nodes, (uint64_t)elapsed_ms);
 
@@ -198,6 +211,7 @@ static void *search_thread(void *arg) {
 
     if (setjmp(td[0].jmp)) {
         fflush(stdout);
+        ABORT_SIGNAL = 1;
         td->done = 1;
         return NULL;
     };
@@ -215,7 +229,7 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     board_t *board = &td->board;
 
     // bool stop = atomic_load(&gs->stop);
-    if (ABORT_SIGNAL) {
+    if (ABORT_SIGNAL || should_abort_thread(td)) {
         longjmp(td->jmp, 1);
     }
 
@@ -331,7 +345,7 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
     board_t *board = &td->board;
 
     // bool stop = atomic_load(&gs->stop);
-    if (ABORT_SIGNAL) {
+    if (ABORT_SIGNAL || should_abort_thread(td)) {
         longjmp(td->jmp, 1);
     }
 

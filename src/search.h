@@ -7,7 +7,7 @@
 #include "hashtable.h"
 #include "types.h"
 
-extern bool ABORT_SIGNAL;
+extern volatile bool ABORT_SIGNAL;
 
 typedef struct s_searchsettings {
     uint64_t movetime;
@@ -30,6 +30,10 @@ typedef struct s_globalstate {
     int16_t alpha;
     int16_t beta;
 
+
+    double start_time;
+    uint64_t time_limit;
+
     atomic_bool stop;
 } globalstate_t;
 
@@ -41,7 +45,7 @@ typedef struct s_gosearchdata {
 
 typedef struct s_sthreaddata {
     globalstate_t *gs;
-    searchsettings_t *settings; // our limits
+    searchsettings_t *ss;
     board_t board;
     int16_t depth;
 

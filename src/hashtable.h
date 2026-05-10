@@ -5,6 +5,8 @@
 
 #include <string.h>
 #include <stdint.h>
+#include <stdatomic.h>
+#include <pthread.h>
 
 extern const uint64_t PIECE_TO_HASH_INDEX[16];
 extern const uint64_t RANDOM_64[781];
@@ -62,7 +64,7 @@ typedef enum e_tt_flag {
 } tt_flag;
 
 typedef struct s_tt_entry {
-    uint64_t hash;
+    _Atomic uint64_t hash;
     uint16_t bestmove;
     int16_t value;
     uint8_t depth;
@@ -71,12 +73,15 @@ typedef struct s_tt_entry {
 
 typedef struct s_ttable {
     tt_entry_t* entries;
+    pthread_mutex_t mtx;
+    
     size_t count;
     uint64_t mask;
 } ttable_t;
 
 static inline ttable_t init_transposition_table(size_t pow2size) {
     ttable_t table;
+    pthread_mutex_init(&table.mtx, NULL);
     table.entries = malloc(sizeof(tt_entry_t) * pow2size);
     table.count = pow2size;
     table.mask = pow2size-1;
@@ -85,18 +90,57 @@ static inline ttable_t init_transposition_table(size_t pow2size) {
 
 static inline void free_ttable(ttable_t* table)
 {
+    pthread_mutex_destroy(&table->mtx);
     free(table->entries);
     table->count = 0;
 }
 
 static inline void clear_ttable(ttable_t* table) {
+    // pthread_mutex_lock(&table->mtx);
     memset(table->entries, 0, table->count * sizeof(tt_entry_t));
+    // pthread_mutex_unlock(&table->mtx);
 }
 
-static inline tt_entry_t get_tt_entry(ttable_t table, uint64_t hash) {
-    return table.entries[hash & table.mask];
+static inline tt_entry_t get_tt_entry(ttable_t* table, uint64_t hash) {
+    // pthread_mutex_lock(&table->mtx);
+    // tt_entry_t val = table->entries[hash & table->mask];
+    // pthread_mutex_unlock(&table->mtx);
+
+
+    tt_entry_t result = {0};
+
+    tt_entry_t* entry =
+        &table->entries[hash & table->mask];
+
+    uint64_t stored_hash =
+        atomic_load_explicit(
+            &entry->hash,
+            memory_order_acquire
+        );
+
+    if (stored_hash != hash)
+        return result;
+
+    result.hash = stored_hash;
+    result.bestmove = entry->bestmove;
+    result.value = entry->value;
+    result.depth = entry->depth;
+    result.flag = entry->flag;
+
+    return result;    
 }
 
-static inline void write_tt_entry(ttable_t table, tt_entry_t entry) {
-    table.entries[entry.hash & table.mask] = entry;
+static inline void write_tt_entry(ttable_t* table, tt_entry_t replace) {
+    // pthread_mutex_lock(&table->mtx);
+    // table->entries[replace.hash & table->mask] = replace;
+    // pthread_mutex_unlock(&table->mtx);
+
+    tt_entry_t* entry = &table->entries[replace.hash & table->mask];
+
+    entry->bestmove = replace.bestmove;
+    entry->value = replace.value;
+    entry->depth = replace.depth;
+    entry->flag = replace.flag;
+
+    atomic_store_explicit(&entry->hash, replace.hash, memory_order_release);
 }

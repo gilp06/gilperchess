@@ -103,7 +103,7 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
             //     start_search(gs, board, 7);
             // }
 
-            searchsettings_t cur_search = infinite_search;
+            searchparams_t cur_search = infinite_search;
             uint64_t perft_depth = 1;
             int res;
 

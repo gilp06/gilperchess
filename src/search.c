@@ -217,6 +217,8 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     int16_t alpha_orig = alpha;
     int16_t tt_move = 0;
 
+    int16_t eval = evaluate(board);
+
     if (is_draw(board)) {
         return 0;
     }
@@ -234,6 +236,13 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
 
         tt_move = entry.bestmove;
     }
+
+    if (depth <= 3 && !incheck && eval + (150 + 100 * depth) < alpha)
+    {
+        int16_t qscore = qsearch(td, alpha, beta, ply+1);
+        if(qscore < alpha) return qscore;
+    }
+
     
     if (depth == 0)
         return qsearch(td, alpha, beta, ply + 1);

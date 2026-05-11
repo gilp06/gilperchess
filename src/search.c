@@ -119,6 +119,7 @@ void search_bestmove(globalstate_t *gs, board_t const *starting_board) {
         td[i].worker = true;
         td[i].nodes = 0;
         memset(td[i].pv_length, 0, sizeof(td[i].pv_length));
+        memset(td[i].pv_array, 0, sizeof(td[i].pv_array));
     }
 
     // identify main thread
@@ -205,8 +206,9 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     }
 
     td->nodes++;
+    td->pv_length[ply] = 0;
 
-    bool pv_node = (beta - alpha) > 1;
+    bool pv_node = alpha == beta - 1;
 
     int16_t alpha_orig = alpha;
     int16_t tt_move = 0;
@@ -322,6 +324,8 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
     td->nodes++;
     // atomic_store(&gs->nodes, atomic_load(&gs->nodes)+1);
     // gs->nodes++;
+
+
 
     move_t tt_move=0, best_move=0;
     tt_entry_t entry = get_tt_entry(&gs->transposition_table, board->st.key);
@@ -470,6 +474,7 @@ move_t select_move(board_t *board, moveselect_t *ms) {
     move_t best_move = 0;
 
     switch (ms->phase) {
+
     case TT_MOVE:
         ms->phase = GEN_MOVES;
         return ms->tt_move;

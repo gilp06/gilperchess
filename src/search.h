@@ -4,6 +4,8 @@
 #include <stdatomic.h>
 
 #include "hashtable.h"
+#include "move_select.h"
+#include "board.h"
 #include "types.h"
 
 
@@ -61,26 +63,9 @@ typedef struct s_sthreaddata {
     bool worker;
 } sthreaddata_t;
 
-typedef enum e_selectphase { TT_MOVE, GEN_MOVES, MOVES, DONE } selectphase_t;
-
-typedef struct s_moveselect {
-    move_t moves[256];
-    int16_t move_scores[256];
-    size_t count;
-    move_t tt_move;
-    selectphase_t phase;
-    bool nonquiet_only;
-} moveselect_t;
-
-void init_select(board_t *board, moveselect_t *move_select, move_t tt_move,
-                 bool nonquiet_only);
-move_t select_move(board_t *board, moveselect_t *move_select);
-
-void search_bestmove(globalstate_t *gs, board_t const *starting_board);
-
 void *go_search(void *arg);
-void *iterative_search(void *arg);
-
+void *search(void *arg);
+void search_bestmove(globalstate_t *gs, board_t const *starting_board);
 int16_t alphabeta(sthreaddata_t *td, bool root, int16_t depth, int16_t alpha,
                   int16_t beta, int16_t ply);
 int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply);

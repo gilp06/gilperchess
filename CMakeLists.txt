@@ -12,6 +12,7 @@ target_sources(gilperchess
         src/board.c
         src/types.c
         src/move_gen.c
+        src/move_select.c
         src/utils.c
         src/uci.c
         src/hashtable.c

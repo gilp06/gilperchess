@@ -2,12 +2,26 @@
 #include "board.h"
 
 
-#define VAL_PAWN   100
-#define VAL_KNIGHT 320
-#define VAL_BISHOP 330
-#define VAL_ROOK   500
-#define VAL_QUEEN  900
-#define VAL_KING   0 
+
+const int16_t piece_values[16] = {
+    [PIECE_NONE]    = 0,
+
+    // white pieces
+    [PIECE_WPAWN]   = VAL_PAWN,
+    [PIECE_WKNIGHT] = VAL_KNIGHT,
+    [PIECE_WBISHOP] = VAL_BISHOP,
+    [PIECE_WROOK]   = VAL_ROOK,
+    [PIECE_WQUEEN]  = VAL_QUEEN,
+    [PIECE_WKING]   = VAL_KING,
+
+    // black pieces
+    [PIECE_BPAWN]   = VAL_PAWN,
+    [PIECE_BKNIGHT] = VAL_KNIGHT,
+    [PIECE_BBISHOP] = VAL_BISHOP,
+    [PIECE_BROOK]   = VAL_ROOK,
+    [PIECE_BQUEEN]  = VAL_QUEEN,
+    [PIECE_BKING]   = VAL_KING,
+};
 
 static int16_t pawn_table[64] = {
     0,  0,  0,  0,   0,   0,  0,  0,  50, 50, 50,  50, 50, 50,  50, 50,

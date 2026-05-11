@@ -131,9 +131,9 @@ void search_bestmove(globalstate_t *gs, board_t const *starting_board) {
 
     // start worker threads
     for (int i = 1; i < THREAD_COUNT; i++) {
-        pthread_create(&pts[i - 1], NULL, iterative_search, &td[i]);
+        pthread_create(&pts[i - 1], NULL, search, &td[i]);
     }
-    iterative_search(&td[0]);
+    search(&td[0]);
 
     ABORT_SIGNAL = 1;
     for (int i = 1; i < THREAD_COUNT; i++) {
@@ -149,7 +149,7 @@ void search_bestmove(globalstate_t *gs, board_t const *starting_board) {
     fflush(stdout);
 }
 
-void *iterative_search(void *arg) {
+void *search(void *arg) {
     sthreaddata_t *td = (sthreaddata_t *)arg;
 
     int16_t alpha = -INT16_MAX;
@@ -202,6 +202,7 @@ void *iterative_search(void *arg) {
 int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
                   int16_t alpha, int16_t beta, int16_t ply) {
 
+    depth = depth > 0 ? depth : 0;
     globalstate_t *gs = td->gs;
     board_t *board = &td->board;
 
@@ -237,30 +238,26 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
         tt_move = entry.bestmove;
     }
 
-    if (depth <= 3 && !incheck && eval + (150 + 100 * depth) < alpha)
-    {
-        int16_t qscore = qsearch(td, alpha, beta, ply+1);
-        if(qscore < alpha) return qscore;
+    if (depth <= 3 && !incheck && eval + (150 + 100 * depth) < alpha) {
+        int16_t qscore = qsearch(td, alpha, beta, ply + 1);
+        if (qscore < alpha)
+            return qscore;
     }
 
-    
     if (depth == 0)
         return qsearch(td, alpha, beta, ply + 1);
 
-
-
-
-    if (depth >= 2 && !incheck && !pv_node) {
+    if (depth >= 3 && !incheck && !pv_node) {
+        int16_t R = 3 + depth / 6;
         dstate_t undo;
         perform_null_move(board, &undo);
-        int16_t score = -alphabeta(td, false, depth-1, -beta, -(beta-1), ply);
+        int16_t score =
+            -alphabeta(td, false, depth - 1 - R, -beta, -(beta - 1), ply);
         undo_null_move(board, &undo);
         if (score >= beta) {
             return score;
         }
     }
-
-    
 
     moveselect_t move_select;
     init_select(board, &move_select, tt_move, false);
@@ -275,6 +272,8 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
         if (cur_move == 0)
             break;
 
+        bool iscapture = is_capture(board, cur_move);
+
         dstate_t undo;
         if (!perform_move(board, cur_move, &undo)) {
             // illegal move; try next
@@ -285,7 +284,19 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
 
         if (played == 1) {
             value = -alphabeta(td, false, depth - 1, -beta, -alpha, ply + 1);
-        } else {
+        }
+        // late move pruning
+        else if (depth >= 3 && played >= 4 && !pv_node && !incheck &&
+                   !iscapture && (move_type(cur_move) != PROMOTION)) {
+            value =
+                -alphabeta(td, false, depth - 2, -alpha - 1, -alpha, ply + 1);
+            if (value > alpha) {
+                value =
+                    -alphabeta(td, false, depth - 1, -beta, -alpha, ply + 1);
+            }
+        }
+        // PVS search
+        else {
             value =
                 -alphabeta(td, false, depth - 1, -alpha - 1, -alpha, ply + 1);
             if (pv_node && value > alpha) {
@@ -392,6 +403,8 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
         move_t cur_move = select_move(board, &move_select);
         if (cur_move == 0)
             break;
+        if (!see(board, cur_move, 0))
+            continue;
         dstate_t undo;
         if (!perform_move(board, cur_move, &undo)) {
             // illegal move; try next
@@ -403,16 +416,6 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
 
         int16_t score = -qsearch(td, -beta, -alpha, ply + 1);
         undo_move(board, &undo);
-
-        // if (score >= beta) {
-        //     return score;
-        // }
-        // if (score > best_val) {
-        //     best_val = score;
-        // }
-        // if (score > alpha) {
-        //     alpha = score;
-        // }
 
         if (score > best_val) {
             best_val = score;
@@ -442,87 +445,4 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
     write_tt_entry(&gs->transposition_table, entry);
 
     return best_val;
-}
-
-static const uint8_t MVV_LVA[7][7] = {
-    {15, 14, 13, 12, 11, 10, 0}, {25, 24, 23, 22, 21, 20, 0},
-    {35, 34, 33, 32, 31, 30, 0}, {45, 44, 43, 42, 41, 40, 0},
-    {55, 54, 53, 52, 51, 50, 0}, {0, 0, 0, 0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, 0},
-};
-
-void score_moves(board_t *board, moveselect_t *move_select) {
-    for (int i = 0; i < move_select->count; i++) {
-        move_select->move_scores[i] = 0;
-        move_t move = move_select->moves[i];
-        piece_t from = board->pieces_at[move_from(move)];
-        piece_t to = board->pieces_at[move_to(move)];
-        if (to == PIECE_NONE)
-            continue;
-
-        move_select->move_scores[i] = MVV_LVA[piece_type(to)][piece_type(from)];
-    }
-}
-
-void init_select(board_t *board, moveselect_t *move_select, move_t tt_move,
-                 bool nonquiet_only) {
-    move_select->phase = (tt_move != 0) ? TT_MOVE : GEN_MOVES;
-    move_select->tt_move = tt_move;
-    move_select->nonquiet_only = nonquiet_only;
-}
-
-// from ethereal, i like this
-static size_t get_best(moveselect_t *move_select, size_t start, size_t end) {
-    size_t best = start;
-    for (int i = start + 1; i < end; i++) {
-        if (move_select->move_scores[i] > move_select->move_scores[best]) {
-            best = i;
-        }
-    }
-    return best;
-}
-
-static move_t pop_move(size_t *length, move_t *moves, int16_t *scores,
-                       size_t index) {
-    // basically we want to swap the index with the last position, then
-    // decrement length.
-    move_t popped = moves[index];
-    moves[index] = moves[--*length];
-    scores[index] = scores[*length];
-    return popped;
-}
-
-move_t select_move(board_t *board, moveselect_t *ms) {
-
-    move_t *moves = ms->moves;
-    int16_t *scores = ms->move_scores;
-
-    move_t best_move = 0;
-
-    switch (ms->phase) {
-
-    case TT_MOVE:
-        ms->phase = GEN_MOVES;
-        return ms->tt_move;
-        // next case
-    case GEN_MOVES:
-        generate_pseudolegal_moves(board, board->side_to_move, ms->moves,
-                                   &ms->count, ms->nonquiet_only);
-        score_moves(board, ms);
-        ms->phase = MOVES;
-    case MOVES:
-        while (ms->count > 0) {
-            size_t best = get_best(ms, 0, ms->count);
-            // fetch move
-            best_move = pop_move(&ms->count, moves, scores, best);
-            if (best_move == ms->tt_move)
-                continue;
-            return best_move;
-        }
-        ms->phase = DONE;
-    case DONE:
-        return 0;
-    default:
-        return 0;
-    }
 }

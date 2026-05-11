@@ -25,8 +25,18 @@ const searchparams_t infinite_search = {.movetime = 0,
                                         .movestogo = 0};
 
 #define THREAD_COUNT 1
+
 sthreaddata_t td[THREAD_COUNT];
 pthread_t pts[THREAD_COUNT - 1]; // reuse main search thread
+
+static void store_pv(int ply, move_t move, sthreaddata_t *td) {
+    // store pv into the table and propogate it upward
+    td->pv_array[ply][0] = move;
+    for (int i = 0; i < td->pv_length[ply + 1]; i++) {
+        td->pv_array[ply][i + 1] = td->pv_array[ply + 1][i];
+    }
+    td->pv_length[ply] = td->pv_length[ply + 1] + 1;
+}
 
 static bool should_abort(const sthreaddata_t *td) {
     searchlimits_t limits = td->gs->limits;
@@ -108,6 +118,7 @@ void search_bestmove(globalstate_t *gs, board_t const *starting_board) {
         td[i].board = *starting_board; // give copy of board
         td[i].worker = true;
         td[i].nodes = 0;
+        memset(td[i].pv_length, 0, sizeof(td[i].pv_length));
     }
 
     // identify main thread
@@ -125,7 +136,7 @@ void search_bestmove(globalstate_t *gs, board_t const *starting_board) {
     }
 
     // for now, just pick best move from thread 0
-    move_t best_move = td[0].best_move;
+    move_t best_move = td[0].pvs[0];
     char move_str[6];
     move_to_string(best_move, move_str);
 
@@ -144,11 +155,24 @@ void *iterative_search(void *arg) {
         if (setjmp(td->jmp))
             break;
 
+        if (cur_depth >= 5) {
+            int16_t delta = 120 + cur_depth * 5;
+            alpha = td->score - delta;
+            beta = td->score + delta;
+        }
+
         int16_t score = alphabeta(td, true, cur_depth, alpha, beta, 0);
+        if (score < alpha) {
+            alpha = -INT16_MAX;
+            score = alphabeta(td, true, cur_depth, alpha, beta, 0);
+        } else if (score > beta) {
+            beta = INT16_MAX;
+            score = alphabeta(td, true, cur_depth, alpha, beta, 0);
+        }
 
         td->score = score;
-        td->best_move = td->cur_best;
         td->depth_finished = cur_depth;
+        memcpy(td->pvs, td->pv_array[0], sizeof(td->pv_array[0]));
         cur_depth++;
 
         if (td->worker)
@@ -156,8 +180,16 @@ void *iterative_search(void *arg) {
 
         // output info (should probably include the sum of all node counts)
         double cur_time = get_real_time() - td->gs->start_time;
-        printf("info depth %d score cp %d time %llu\n", td[0].depth_finished,
-               td[0].score, (uint64_t)cur_time);
+        printf("info nodes %llu depth %d score cp %d time %llu pv ",
+               td[0].nodes, td[0].depth_finished, td[0].score,
+               (uint64_t)cur_time);
+        for (int i = 0; i < td[0].pv_length[0]; i++) {
+            char move_buf[6];
+            move_to_string(td[0].pv_array[0][i], move_buf);
+            printf("%s ", move_buf);
+        }
+        printf("\n");
+        fflush(stdout);
     }
     return NULL;
 }
@@ -168,15 +200,13 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     globalstate_t *gs = td->gs;
     board_t *board = &td->board;
 
-    // bool stop = atomic_load(&gs->stop);
     if (ABORT_SIGNAL || should_abort(td)) {
         longjmp(td->jmp, 1);
     }
 
-    // atomic_fetch_add(&gs->nodes, 1);
     td->nodes++;
-    // atomic_store(&gs->nodes, atomic_load(&gs->nodes)+1);
-    // gs->nodes++;
+
+    bool pv_node = (beta - alpha) > 1;
 
     int16_t alpha_orig = alpha;
     int16_t tt_move = 0;
@@ -188,6 +218,13 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     // check transposition table
     tt_entry_t entry = get_tt_entry(&gs->transposition_table, board->st.key);
     if (entry.flag != INVALID && entry.hash == board->st.key) {
+
+        if (entry.depth >= depth && (depth == 0 || !pv_node)) {
+            if (entry.flag == EXACT ||
+                (entry.flag == LOWERBOUND && entry.value >= beta) ||
+                (entry.flag == UPPERBOUND && entry.value <= alpha))
+                return entry.value;
+        }
 
         tt_move = entry.bestmove;
     }
@@ -216,19 +253,18 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
         }
         played++;
 
-        // value = -alphabeta(td, false, depth-1, -beta, -alpha, ply+1);
-        // sketchy PV node thing, assume that the first move is PV node (its
-        // not)
         if (played == 1) {
             value = -alphabeta(td, false, depth - 1, -beta, -alpha, ply + 1);
         } else {
             value =
                 -alphabeta(td, false, depth - 1, -alpha - 1, -alpha, ply + 1);
-            if (alpha < value && value < beta) {
+            if (pv_node && value > alpha) {
                 value =
                     -alphabeta(td, false, depth - 1, -beta, -alpha, ply + 1);
             }
         }
+
+        undo_move(board, &undo);
 
         if (value > best_value) {
             best_value = value;
@@ -236,14 +272,12 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
 
             if (value > alpha) {
                 alpha = value;
-
+                store_pv(ply, best_move, td);
                 if (alpha >= beta) {
-                    undo_move(board, &undo);
                     break;
                 }
             }
         }
-        undo_move(board, &undo);
     }
 
     if (played == 0) {
@@ -269,8 +303,6 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
         entry.bestmove = (entry.flag == UPPERBOUND) ? 0 : best_move;
 
         write_tt_entry(&gs->transposition_table, entry);
-    } else {
-        td->cur_best = best_move;
     }
 
     return best_value;
@@ -278,8 +310,9 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
 
 int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
 
-    // globalstate_t *gs = td->gs;
+    globalstate_t *gs = td->gs;
     board_t *board = &td->board;
+    int16_t alpha_orig = alpha;
 
     if (ABORT_SIGNAL || should_abort(td)) {
         longjmp(td->jmp, 1);
@@ -289,6 +322,20 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
     td->nodes++;
     // atomic_store(&gs->nodes, atomic_load(&gs->nodes)+1);
     // gs->nodes++;
+
+    move_t tt_move=0, best_move=0;
+    tt_entry_t entry = get_tt_entry(&gs->transposition_table, board->st.key);
+    if (entry.flag != INVALID && entry.hash == board->st.key) {
+
+        // if (entry.depth >= depth && (depth == 0 || !pv_node)) {
+        if (entry.flag == EXACT ||
+            (entry.flag == LOWERBOUND && entry.value >= beta) ||
+            (entry.flag == UPPERBOUND && entry.value <= alpha))
+            return entry.value;
+        // }
+
+        tt_move = entry.bestmove;
+    }
 
     if (is_draw(board))
         return 0;
@@ -309,7 +356,7 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
     moveselect_t move_select;
 
     int32_t played = 0;
-    init_select(&td->board, &move_select, 0, !incheck);
+    init_select(&td->board, &move_select, tt_move, !incheck);
 
     while (true) {
         move_t cur_move = select_move(board, &move_select);
@@ -326,14 +373,26 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
 
         int16_t score = -qsearch(td, -beta, -alpha, ply + 1);
         undo_move(board, &undo);
-        if (score >= beta) {
-            return score;
-        }
+
+        // if (score >= beta) {
+        //     return score;
+        // }
+        // if (score > best_val) {
+        //     best_val = score;
+        // }
+        // if (score > alpha) {
+        //     alpha = score;
+        // }
+
         if (score > best_val) {
             best_val = score;
-        }
-        if (score > alpha) {
-            alpha = score;
+            best_move = cur_move;
+
+            if (score > alpha) {
+                alpha = score;
+            }
+            if (alpha >= beta)
+                break;
         }
     }
 
@@ -341,6 +400,16 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
         if (incheck)
             return INT16_MIN + 1 + ply;
     }
+
+    entry.depth = 0;
+    entry.hash = board->st.key;
+    entry.value = best_val;
+    entry.flag = best_val >= beta         ? LOWERBOUND
+                 : best_val <= alpha_orig ? UPPERBOUND
+                                          : EXACT;
+    entry.bestmove = (entry.flag == UPPERBOUND) ? 0 : best_move;
+
+    write_tt_entry(&gs->transposition_table, entry);
 
     return best_val;
 }

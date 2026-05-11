@@ -6,6 +6,9 @@
 #include "hashtable.h"
 #include "types.h"
 
+
+#define MAX_DEPTH 20
+
 extern volatile bool ABORT_SIGNAL;
 
 typedef struct s_searchparams {
@@ -43,10 +46,15 @@ typedef struct s_gosearchdata {
 typedef struct s_sthreaddata {
     globalstate_t *gs;
     board_t board;
+
+    move_t pv_array[MAX_DEPTH][MAX_DEPTH];
+    uint8_t pv_length[MAX_DEPTH];
+    move_t pvs[MAX_DEPTH];
+    
     int16_t depth_finished;
 
-    move_t best_move, cur_best;
-    int16_t score, cur_score;
+    move_t best_move;
+    int16_t score;
 
     uint64_t nodes;
     jmp_buf jmp;

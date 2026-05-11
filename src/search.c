@@ -206,7 +206,7 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     }
 
     td->nodes++;
-    td->pv_length[ply] = 0;
+    // td->pv_length[ply] = 0;
 
     bool pv_node = alpha == beta - 1;
 

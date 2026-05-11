@@ -87,6 +87,10 @@ static searchlimits_t gen_limits(searchparams_t *params, side_t side_to_move) {
         limits.nodes = params->nodes;
     }
 
+    if (limits.time > 11) {
+        limits.time -= 10;
+    }
+
     return limits;
 }
 

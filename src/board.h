@@ -14,6 +14,8 @@ void set_piece(board_t* board, piece_t piece, bindex_t pos);
 
 bool perform_move(board_t* board, move_t move, dstate_t* undo);
 void undo_move(board_t* board, dstate_t* undo);
+void perform_null_move(board_t* board, dstate_t* undo);
+void undo_null_move(board_t* board, dstate_t* undo);
 bool in_check(board_t* board, side_t side);
 
 uint8_t king_square(const board_t* board, side_t side);

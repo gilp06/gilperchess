@@ -208,8 +208,8 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     td->nodes++;
     // td->pv_length[ply] = 0;
 
-    bool pv_node = alpha == beta - 1;
-
+    bool pv_node = alpha != beta - 1;
+    bool incheck = in_check(board, board->side_to_move);
     int16_t alpha_orig = alpha;
     int16_t tt_move = 0;
 
@@ -230,9 +230,24 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
 
         tt_move = entry.bestmove;
     }
-
+    
     if (depth == 0)
         return qsearch(td, alpha, beta, ply + 1);
+
+
+
+
+    if (depth >= 2 && !incheck && !pv_node) {
+        dstate_t undo;
+        perform_null_move(board, &undo);
+        int16_t score = -alphabeta(td, false, depth-1, -beta, -(beta-1), ply);
+        undo_null_move(board, &undo);
+        if (score >= beta) {
+            return score;
+        }
+    }
+
+    
 
     moveselect_t move_select;
     init_select(board, &move_select, tt_move, false);
@@ -283,7 +298,7 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     }
 
     if (played == 0) {
-        if (in_check(board, board->side_to_move))
+        if (incheck)
             return INT16_MIN + ply + 1;
         else
             return 0;
@@ -325,9 +340,7 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
     // atomic_store(&gs->nodes, atomic_load(&gs->nodes)+1);
     // gs->nodes++;
 
-
-
-    move_t tt_move=0, best_move=0;
+    move_t tt_move = 0, best_move = 0;
     tt_entry_t entry = get_tt_entry(&gs->transposition_table, board->st.key);
     if (entry.flag != INVALID && entry.hash == board->st.key) {
 

@@ -588,3 +588,42 @@ bool is_draw(board_t *board) {
     //     printf("repetitions: %d\n", repetitions);
     return repetitions >= 2;
 }
+
+
+void perform_null_move(board_t *board, dstate_t *undo) {
+
+    undo->move = 0;
+    undo->captured = PIECE_NONE;
+    undo->prev_state = board->st;
+
+    // increment previous position into history
+    board->key_hist[board->move_number++] = board->st.key;
+
+    // stupid polyglot thing
+    if (board->st.ep_was_possible == 1) {
+        board->st.key ^=
+            RANDOM_64[RANDOM_ENPASSANT + SQUARE_TO_FILE[board->st.ep_square]];
+    }
+    board->st.ep_was_possible = 0;
+
+    board->st.ep_square = 64;
+    side_t us = board->side_to_move;
+    side_t them = !us;
+
+    board->st.halfmove_clock++;
+
+    if (us == SIDE_BLACK)
+        board->st.fullmove_clock++;
+
+    board->side_to_move = them;
+    board->st.key ^= RANDOM_64[RANDOM_TURN];
+}
+
+
+void undo_null_move(board_t *board, dstate_t *undo) {
+    board->st = undo->prev_state;
+
+    board->move_number--;
+    board->key_hist[board->move_number] = 0;
+    board->side_to_move = !board->side_to_move;
+}

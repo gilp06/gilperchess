@@ -7,7 +7,7 @@
 #include "types.h"
 
 
-#define MAX_DEPTH 20
+#define MAX_DEPTH 64
 
 extern volatile bool ABORT_SIGNAL;
 

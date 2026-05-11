@@ -1,0 +1,1 @@
+Toy hobby chess engine shenanigan. Right now is pretty barebones, with not much pruning happening outside of some suboptimal null move pruning. Currently hits about 9M-12M nodes per second, but again it can't reach too far down because of how much it branches.

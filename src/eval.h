@@ -11,3 +11,4 @@
 
 extern const int16_t piece_values[16];
 int16_t evaluate(board_t* board);
+int16_t evaluate_from_scratch(board_t* board);

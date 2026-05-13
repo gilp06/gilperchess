@@ -4,11 +4,22 @@
 #include "types.h"
 #include "uci.h"
 #include "utils.h"
+#include "nnue.h"
 
 #include <time.h>
 
 int main() {
     setvbuf(stdout, NULL, _IONBF, 0);
+
+    if (!load_nnue("nnue/beans.bin")) {
+        printf("failed to load NNUE!\n");
+        exit(1);
+    }
+
+    for (int i = 0; i < 16; i++) {
+        printf("HL biases: %d\n", NNUE.feature_biases.values[i]);
+    }
+    printf("output bias: %d\n", NNUE.output_bias);
 
     init_pext_table();
 
@@ -24,4 +35,6 @@ int main() {
     while (!done) {
         done = uci_loop(&gs, &b);
     }
+
+    exit(0);
 }

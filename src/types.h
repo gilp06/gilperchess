@@ -1,10 +1,11 @@
 #pragma once
 
-
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
+
+#include "nnue.h"
 
 typedef uint64_t bb_t;
 typedef uint16_t move_t;
@@ -122,6 +123,11 @@ typedef struct s_board {
     piece_t pieces_at[64];
     uint64_t key_hist[8192]; // this is what ethereal uses, I think it should be sufficient
     state_t st;
+
+
+    // NNUE stuff
+    accumulator_t white_accum;
+    accumulator_t black_accum;
 } board_t;
 
 typedef struct s_dstate {

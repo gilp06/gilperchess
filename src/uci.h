@@ -18,6 +18,7 @@ typedef enum e_uci_command {
     COMMAND_QUIT,
     COMMAND_DISPLAY,
     COMMAND_UCINEWGAME,
+    COMMAND_EVAL,
     COMMAND_NONE,
 } uci_command_t;
 

@@ -160,20 +160,20 @@ void *search(void *arg) {
         if (setjmp(td->jmp))
             break;
 
-        if (cur_depth >= 5) {
-            int16_t delta = 120 + cur_depth * 5;
-            alpha = td->score - delta;
-            beta = td->score + delta;
-        }
+        // if (cur_depth >= 5) {
+        //     int16_t delta = 120 + cur_depth * 5;
+        //     alpha = td->score - delta;
+        //     beta = td->score + delta;
+        // }
 
         int16_t score = alphabeta(td, true, cur_depth, alpha, beta, 0);
-        if (score < alpha) {
-            alpha = -INT16_MAX;
-            score = alphabeta(td, true, cur_depth, alpha, beta, 0);
-        } else if (score > beta) {
-            beta = INT16_MAX;
-            score = alphabeta(td, true, cur_depth, alpha, beta, 0);
-        }
+        // if (score < alpha) {
+        //     alpha = -INT16_MAX;
+        //     score = alphabeta(td, true, cur_depth, alpha, beta, 0);
+        // } else if (score > beta) {
+        //     beta = INT16_MAX;
+        //     score = alphabeta(td, true, cur_depth, alpha, beta, 0);
+        // }
 
         td->score = score;
         td->depth_finished = cur_depth;
@@ -238,26 +238,27 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
         tt_move = entry.bestmove;
     }
 
-    if (depth <= 3 && !incheck && eval + (150 + 100 * depth) < alpha) {
-        int16_t qscore = qsearch(td, alpha, beta, ply + 1);
-        if (qscore < alpha)
-            return qscore;
-    }
+    // if (depth <= 3 && !incheck && eval + (150 + 100 * depth) < alpha) {
+    //     int16_t qscore = qsearch(td, alpha, beta, ply + 1);
+    //     if (qscore < alpha)
+    //         return qscore;
+    // }
 
     if (depth == 0)
+        // return eval;
         return qsearch(td, alpha, beta, ply + 1);
 
-    if (depth >= 3 && !incheck && !pv_node) {
-        int16_t R = 3 + depth / 6;
-        dstate_t undo;
-        perform_null_move(board, &undo);
-        int16_t score =
-            -alphabeta(td, false, depth - 1 - R, -beta, -(beta - 1), ply);
-        undo_null_move(board, &undo);
-        if (score >= beta) {
-            return score;
-        }
-    }
+    // if (depth >= 3 && !incheck && !pv_node) {
+    //     int16_t R = 3 + depth / 6;
+    //     dstate_t undo;
+    //     perform_null_move(board, &undo);
+    //     int16_t score =
+    //         -alphabeta(td, false, depth - 1 - R, -beta, -(beta - 1), ply);
+    //     undo_null_move(board, &undo);
+    //     if (score >= beta) {
+    //         return score;
+    //     }
+    // }
 
     moveselect_t move_select;
     init_select(board, &move_select, tt_move, false);
@@ -286,15 +287,15 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
             value = -alphabeta(td, false, depth - 1, -beta, -alpha, ply + 1);
         }
         // late move pruning
-        else if (depth >= 3 && played >= 4 && !pv_node && !incheck &&
-                   !iscapture && (move_type(cur_move) != PROMOTION)) {
-            value =
-                -alphabeta(td, false, depth - 2, -alpha - 1, -alpha, ply + 1);
-            if (value > alpha) {
-                value =
-                    -alphabeta(td, false, depth - 1, -beta, -alpha, ply + 1);
-            }
-        }
+        // else if (depth >= 3 && played >= 4 && !pv_node && !incheck &&
+        //            !iscapture && (move_type(cur_move) != PROMOTION)) {
+        //     value =
+        //         -alphabeta(td, false, depth - 2, -alpha - 1, -alpha, ply + 1);
+        //     if (value > alpha) {
+        //         value =
+        //             -alphabeta(td, false, depth - 1, -beta, -alpha, ply + 1);
+        //     }
+        // }
         // PVS search
         else {
             value =

@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "board.h"
+#include "eval.h"
 #include "hashtable.h"
 #include "move_gen.h"
 #include "perft.h"
@@ -64,6 +65,8 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
             command = COMMAND_UCINEWGAME;
         } else if (strcmp(tok, "stop") == 0) {
             command = COMMAND_STOP;
+        } else if (strcmp(tok, "eval") == 0) {
+            command = COMMAND_EVAL;
         }
 
         switch (command) {
@@ -80,6 +83,23 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
             printf("readyok\n");
             fflush(stdout);
             return false;
+        }
+        case COMMAND_EVAL: {
+            printf("eval: %d\n", evaluate(board));
+            board->side_to_move = !board->side_to_move;
+            printf("eval opp: %d\n", evaluate(board));
+            board->side_to_move = !board->side_to_move;
+            printf("white accums: ");
+            for (int i = 0; i < 64; i++) {
+                printf("%d ", board->white_accum.values[i]);
+            }
+            printf("\nblack accums: ");
+            for (int i = 0; i < 64; i++) {
+                printf("%d ", board->black_accum.values[i]);
+            }
+            printf("\n");
+            fflush(stdout);
+            return false;        
         }
         case COMMAND_UCINEWGAME: {
             clear_ttable(&gs->transposition_table);

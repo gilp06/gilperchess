@@ -18,6 +18,7 @@ target_sources(gilperchess
         src/hashtable.c
         src/search.c
         src/eval.c
+        src/nnue.c
 )
 target_compile_options(gilperchess PRIVATE -Wall -march=native -O3 -flto -funroll-loops)
  
@@ -30,4 +31,15 @@ add_custom_command(TARGET gilperchess POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy
         $<TARGET_FILE:gilperchess>
         ${OLD_DIR}/gilperchess-${BUILD_TIME}$<TARGET_FILE_SUFFIX:gilperchess>
+)
+
+file(GLOB NNUE_FILES "${CMAKE_SOURCE_DIR}/nnue/*")
+
+add_custom_command(
+    TARGET gilperchess POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+            "${CMAKE_BINARY_DIR}/nnue"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            ${NNUE_FILES}
+            "${CMAKE_BINARY_DIR}/nnue"
 )

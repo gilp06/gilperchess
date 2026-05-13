@@ -3,6 +3,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include "types.h"
 #include "utils.h"
@@ -72,7 +73,40 @@ static inline bb_t attackers_to(board_t *board, bindex_t to, bb_t occupied) {
     return attackers;
 }
 
-static inline bool is_capture(board_t* board, move_t move)
-{
-    return (board->sides_occ[SIDE_WHITE] | board->sides_occ[SIDE_BLACK]) & (1ULL << move_to(move)) || move_type(move) == EN_PASSANT;
+static inline bool is_capture(board_t *board, move_t move) {
+    return (board->sides_occ[SIDE_WHITE] | board->sides_occ[SIDE_BLACK]) &
+               (1ULL << move_to(move)) ||
+           move_type(move) == EN_PASSANT;
+}
+
+// for nnue
+static inline int calculate_chess768_index(side_t perspective, bindex_t square,
+                                           piecetype_t piecetype, side_t side) {
+    if (perspective == SIDE_BLACK) {
+        side = !side;
+        square = square ^ 56;
+    }
+    return side * 64 * 6 + piecetype * 64 + square;
+}
+
+static inline void nnue_add_piece(board_t *board, bindex_t sq, piece_t piece) {
+    assert(piece != PIECE_NONE);
+    piecetype_t pt = piece_type(piece);
+    side_t ps = piece_side(piece);
+    int windex = calculate_chess768_index(SIDE_WHITE, sq, pt, ps);
+    accum_add_feat(&NNUE, windex, &board->white_accum);
+    int bindex = calculate_chess768_index(SIDE_BLACK, sq, pt, ps);
+    accum_add_feat(&NNUE, bindex, &board->black_accum);
+}
+
+static inline void nnue_remove_piece(board_t *board, bindex_t sq,
+                                     piece_t piece) {
+
+    assert(piece != PIECE_NONE);
+    piecetype_t pt = piece_type(piece);
+    side_t ps = piece_side(piece);
+    int windex = calculate_chess768_index(SIDE_WHITE, sq, pt, ps);
+    accum_remove_feat(&NNUE, windex, &board->white_accum);
+    int bindex = calculate_chess768_index(SIDE_BLACK, sq, pt, ps);
+    accum_remove_feat(&NNUE, bindex, &board->black_accum);
 }

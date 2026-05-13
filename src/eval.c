@@ -1,26 +1,25 @@
 #include "eval.h"
 #include "board.h"
-
-
+#include "nnue.h"
 
 const int16_t piece_values[16] = {
-    [PIECE_NONE]    = 0,
+    [PIECE_NONE] = 0,
 
     // white pieces
-    [PIECE_WPAWN]   = VAL_PAWN,
+    [PIECE_WPAWN] = VAL_PAWN,
     [PIECE_WKNIGHT] = VAL_KNIGHT,
     [PIECE_WBISHOP] = VAL_BISHOP,
-    [PIECE_WROOK]   = VAL_ROOK,
-    [PIECE_WQUEEN]  = VAL_QUEEN,
-    [PIECE_WKING]   = VAL_KING,
+    [PIECE_WROOK] = VAL_ROOK,
+    [PIECE_WQUEEN] = VAL_QUEEN,
+    [PIECE_WKING] = VAL_KING,
 
     // black pieces
-    [PIECE_BPAWN]   = VAL_PAWN,
+    [PIECE_BPAWN] = VAL_PAWN,
     [PIECE_BKNIGHT] = VAL_KNIGHT,
     [PIECE_BBISHOP] = VAL_BISHOP,
-    [PIECE_BROOK]   = VAL_ROOK,
-    [PIECE_BQUEEN]  = VAL_QUEEN,
-    [PIECE_BKING]   = VAL_KING,
+    [PIECE_BROOK] = VAL_ROOK,
+    [PIECE_BQUEEN] = VAL_QUEEN,
+    [PIECE_BKING] = VAL_KING,
 };
 
 static int16_t pawn_table[64] = {
@@ -70,12 +69,67 @@ static int16_t king_end_table[64] = {
     -30, -30, -10, 20,  30,  30,  20,  -10, -30, -30, -30, 0,   0,
     0,   0,   -30, -30, -50, -30, -30, -30, -30, -30, -30, -50};
 
-int16_t evaluate(board_t *board)
-{
+// int16_t evaluate_from_scratch(board_t *board) {
+
+//     accumulator_t white_accum = NNUE.feature_biases;
+//     accumulator_t black_accum = NNUE.feature_biases;
+
+//     for (bindex_t sq = 0; sq < 64; sq++) {
+//         piece_t piece = board->pieces_at[sq];
+//         if (piece == PIECE_NONE)
+//             continue;
+
+//         assert(piece != PIECE_NONE);
+//         piecetype_t pt = piece_type(piece);
+//         side_t ps = piece_side(piece);
+//         int windex = calculate_chess768_index(SIDE_WHITE, sq, pt, ps);
+//         accum_add_feat(&NNUE, windex, &white_accum);
+//         int bindex = calculate_chess768_index(SIDE_BLACK, sq, pt, ps);
+//         accum_add_feat(&NNUE, bindex, &black_accum);
+//     }
+
+//     if (board->side_to_move == SIDE_WHITE)
+//         return evaluate_nnue(&NNUE, &white_accum, &black_accum);
+//     return evaluate_nnue(&NNUE, &black_accum, &white_accum);
+// }
+
+// int16_t evaluate(board_t *board) {
+//     int16_t val;
+//     val = evaluate_from_scratch(board);
+//     // if (board->side_to_move == SIDE_WHITE) {
+//         // val = evaluate_nnue(&NNUE, &board->white_accum,
+//         &board->black_accum);
+//     // } else {
+//         // val = -evaluate_nnue(&NNUE, &board->white_accum,
+//         &board->black_accum);
+//     // }
+
+//     if (val == 4424) {
+//         // print_pieces(board->pieces_at);
+//         printf("eval: %d\n", val);
+//         // board->side_to_move = !board->side_to_move;
+//         // printf("eval opp: %d\n", evaluate(board));
+//         // board->side_to_move = !board->side_to_move;
+//         printf("white accums: ");
+//         for (int i = 0; i < 64; i++) {
+//             printf("%d ", board->white_accum.values[i]);
+//         }
+//         printf("\nblack accums: ");
+//         for (int i = 0; i < 64; i++) {
+//             printf("%d ", board->black_accum.values[i]);
+//         }
+
+//         printf("\n");
+//     }
+
+//     // assert(val == evaluate_from_scratch(board));
+
+//     return val;
+// }
+int16_t evaluate(board_t *board) {
     int eval = 0;
 
-    int queens =
-        __builtin_popcountll(board->pieces_occ[PIECETYPE_QUEEN]);
+    int queens = __builtin_popcountll(board->pieces_occ[PIECETYPE_QUEEN]);
 
     int is_endgame = (queens == 0);
 
@@ -85,10 +139,10 @@ int16_t evaluate(board_t *board)
             continue;
 
         int side = 1 - 2 * piece_side(p);
-        int pt   = piece_type(p); // assuming (piece = type<<1 | side)
+        int pt = piece_type(p); // assuming (piece = type<<1 | side)
 
         int value = 0;
-        int pst   = 0;
+        int pst = 0;
 
         // mirror square for black
         int psq = (side == 1) ? sq : (sq ^ 56);
@@ -121,9 +175,7 @@ int16_t evaluate(board_t *board)
 
         case PIECETYPE_KING:
             value = VAL_KING;
-            pst = is_endgame
-                ? king_end_table[psq]
-                : king_middle_table[psq];
+            pst = is_endgame ? king_end_table[psq] : king_middle_table[psq];
             break;
         }
 

@@ -5,6 +5,7 @@
 #include "board.h"
 #include "hashtable.h"
 #include "move_gen.h"
+#include "nnue.h"
 #include "types.h"
 #include "utils.h"
 
@@ -180,6 +181,18 @@ void init_board_from_fen(board_t *board, const char *str) {
     board->key_hist[0] = board->st.key;
     board->st.fullmove_clock = fullmove;
     board->move_number = 0;
+
+    // INIT NNUE
+
+    board->white_accum = NNUE.feature_biases;
+    board->black_accum = NNUE.feature_biases;
+
+    for (bindex_t sq = 0; sq < 64; sq++) {
+        piece_t piece = board->pieces_at[sq];
+        if (piece == PIECE_NONE)
+            continue;
+        nnue_add_piece(board, sq, piece);
+    }
 }
 
 typedef bool (*move_fn)(board_t *board, move_t move, dstate_t *undo);
@@ -215,6 +228,7 @@ static bool handle_normal(board_t *board, move_t move, dstate_t *undo) {
     pieces_at[from] = PIECE_NONE;
 
     if (cap) {
+        nnue_remove_piece(board, to, pcaptured);
 
         st->halfmove_clock = 0;
 
@@ -253,6 +267,10 @@ static bool handle_normal(board_t *board, move_t move, dstate_t *undo) {
     board->st.key ^= castling_changes_key(castling_perm_change_mask &
                                           board->st.castling_rights);
     board->st.castling_rights &= ~castling_perm_change_mask;
+
+    nnue_add_piece(board, to, pc);
+    nnue_remove_piece(board, from, pc);
+
     return cap;
 }
 
@@ -267,10 +285,11 @@ static bool handle_ep(board_t *board, move_t move, dstate_t *undo) {
     bb_t move_bb = (1ULL << from) | (1ULL << to);
 
     piece_t pc = board->pieces_at[from];
-
+    piece_t pcaptured = make_piece(PIECETYPE_PAWN, them);
     piecetype_t pc_type = piece_type(pc);
     bindex_t cs = to + PUSH_DIR[them];
     undo->captured = board->pieces_at[cs];
+    // assert(board->pieces_at[cs] == pcaptured);
 
     bb_t cap_board = (1ULL << cs);
 
@@ -287,8 +306,13 @@ static bool handle_ep(board_t *board, move_t move, dstate_t *undo) {
 
     board->st.key ^= fetch_random_piece(pc, from);
     board->st.key ^= fetch_random_piece(pc, to);
-    board->st.key ^= fetch_random_piece(make_piece(PIECETYPE_PAWN, them),
+    board->st.key ^= fetch_random_piece(pcaptured,
                                         cs); // en passant capture
+
+    nnue_add_piece(board, to, pc);
+    nnue_remove_piece(board, from, pc);
+    nnue_remove_piece(board, cs, pcaptured);
+
     return true;
 }
 
@@ -330,6 +354,12 @@ static bool handle_castling(board_t *board, move_t move, dstate_t *undo) {
     board->st.key ^= castling_changes_key(castling_perm_change_mask &
                                           board->st.castling_rights);
     board->st.castling_rights &= ~castling_perm_change_mask;
+
+    nnue_remove_piece(board, from, pc);
+    nnue_add_piece(board, to, pc);
+    nnue_remove_piece(board, rsq_from, rook);
+    nnue_add_piece(board, rsq_to, rook);
+    
     return false;
 }
 
@@ -342,11 +372,12 @@ static bool handle_promotion(board_t *board, move_t move, dstate_t *undo) {
     side_t them = !us;
     piece_t pc = board->pieces_at[from];
     piece_t pcaptured = board->pieces_at[to];
+    piecetype_t promo = move_promo(move);
+    piece_t promo_piece = make_piece(promo, us);
     piecetype_t pc_type = piece_type(pc);
 
     bb_t move_bb = (1ULL << from) | (1ULL << to);
 
-    piecetype_t promo = move_promo(move);
     board->pieces_at[to] = make_piece(promo, us);
     board->pieces_at[from] = PIECE_NONE;
 
@@ -357,7 +388,7 @@ static bool handle_promotion(board_t *board, move_t move, dstate_t *undo) {
     bool cap = (pcaptured != PIECE_NONE);
 
     board->st.key ^= fetch_random_piece(pc, from);
-    board->st.key ^= fetch_random_piece(make_piece(promo, us), to);
+    board->st.key ^= fetch_random_piece(promo_piece, to);
 
     if (cap) {
         board->pieces_occ[piece_type(pcaptured)] ^= (1ULL << to);
@@ -368,7 +399,13 @@ static bool handle_promotion(board_t *board, move_t move, dstate_t *undo) {
         board->st.key ^= castling_changes_key(board->st.castling_rights &
                                               CASTLE_CAPTURE_MASK[us][to]);
         board->st.castling_rights &= ~CASTLE_CAPTURE_MASK[us][to];
+        
+        nnue_remove_piece(board, to, pcaptured);
     }
+    
+    nnue_add_piece(board, to, promo_piece);
+    nnue_remove_piece(board, from, pc);
+
     return cap;
 }
 
@@ -407,18 +444,6 @@ bool perform_move(board_t *board, move_t move, dstate_t *undo) {
     board->side_to_move = them;
     board->st.key ^= RANDOM_64[RANDOM_TURN];
 
-    // int repetitions = 0;
-    // for (int i = board->move_number - 1; i >= 0; i--)
-    // {
-    //     if(board->st.key == board->key_hist[i]) {
-    //         repetitions++;
-    //     }
-    // }
-
-    // if(repetitions != 0)
-    //     printf("repetition %d, move number %d\n", repetitions,
-    //     board->move_number);
-
     return !in_check(board, us);
 }
 
@@ -449,7 +474,12 @@ static void undo_normal(board_t *board, dstate_t *undo) {
         piecetype_t captured_type = piece_type(captured);
         board->pieces_occ[captured_type] ^= (1ULL << to);
         board->sides_occ[them] ^= (1ULL << to);
+
+        nnue_add_piece(board, to, captured);
     }
+
+    nnue_add_piece(board, from, pc);
+    nnue_remove_piece(board, to, pc);
 }
 
 static void undo_promotion(board_t *board, dstate_t *undo) {
@@ -460,22 +490,29 @@ static void undo_promotion(board_t *board, dstate_t *undo) {
     move_t move = undo->move;
     bindex_t from = move_from(move);
     bindex_t to = move_to(move);
+    piece_t pc = board->pieces_at[to];
+    piece_t pawn = make_piece(PIECETYPE_PAWN, us);
 
     piece_t captured = undo->captured;
     bool cap = (captured != PIECE_NONE);
 
     bb_t move_bb = (1ULL << from) | (1ULL << to);
 
-    board->pieces_at[from] = make_piece(PIECETYPE_PAWN, us);
+    board->pieces_at[from] = pawn;
     board->pieces_at[to] = captured;
     board->pieces_occ[PIECETYPE_PAWN] ^= (1ULL << from);
     board->pieces_occ[move_promo(move)] ^= (1ULL << to);
     board->sides_occ[us] ^= move_bb;
+
     if (cap) {
+        nnue_add_piece(board, to, captured);
         piecetype_t captured_type = piece_type(captured);
         board->pieces_occ[captured_type] ^= (1ULL << to);
         board->sides_occ[them] ^= (1ULL << to);
     }
+
+    nnue_add_piece(board, from, pawn);
+    nnue_remove_piece(board, to, pc);
 }
 
 static void undo_ep(board_t *board, dstate_t *undo) {
@@ -505,6 +542,10 @@ static void undo_ep(board_t *board, dstate_t *undo) {
     pieces_at[cs] = captured;
     board->pieces_occ[PIECETYPE_PAWN] ^= (1ULL << cs);
     board->sides_occ[them] ^= (1ULL << cs);
+
+    nnue_add_piece(board, to, pc);
+    nnue_remove_piece(board, from, pc);
+    nnue_remove_piece(board, cs, captured);
 }
 
 static void undo_castling(board_t *board, dstate_t *undo) {
@@ -534,6 +575,7 @@ static void undo_castling(board_t *board, dstate_t *undo) {
 
     bindex_t rsq_from = ROOK_CASTLING_POS[us][cs][0];
     bindex_t rsq_to = ROOK_CASTLING_POS[us][cs][1];
+    piece_t rook = make_piece(PIECETYPE_ROOK, us);
 
     bb_t rook_move_bb = (1ULL << rsq_from) | (1ULL << rsq_to);
 
@@ -542,6 +584,11 @@ static void undo_castling(board_t *board, dstate_t *undo) {
     pieces_at[rsq_to] = PIECE_NONE;
     board->pieces_occ[PIECETYPE_ROOK] ^= rook_move_bb;
     board->sides_occ[us] ^= rook_move_bb;
+
+    nnue_add_piece(board, from, pc);
+    nnue_remove_piece(board, to, pc);
+    nnue_add_piece(board, rsq_from, rook);
+    nnue_remove_piece(board, rsq_to, rook);
 }
 
 static undo_fn undo_handlers[4] = {undo_normal, undo_promotion, undo_ep,
@@ -589,7 +636,6 @@ bool is_draw(board_t *board) {
     return repetitions >= 2;
 }
 
-
 void perform_null_move(board_t *board, dstate_t *undo) {
 
     undo->move = 0;
@@ -618,7 +664,6 @@ void perform_null_move(board_t *board, dstate_t *undo) {
     board->side_to_move = them;
     board->st.key ^= RANDOM_64[RANDOM_TURN];
 }
-
 
 void undo_null_move(board_t *board, dstate_t *undo) {
     board->st = undo->prev_state;

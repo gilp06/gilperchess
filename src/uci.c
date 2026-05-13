@@ -106,22 +106,7 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
             return false;
         }
         case COMMAND_GO: {
-            // tok = strtok_r(NULL, " \n", &last);
-            // if (tok != NULL && strcmp(tok, "perft") == 0) {
-            //     tok = strtok_r(NULL, " \n", &last);
-            //     int depth = atoi(tok);
-            //     if (depth > 0) {
-            //         perft_top(board, depth);
-            //     } else {
-            //         printf("invalid depth argument!\n");
-            //         fflush(stdout);
-            //         return false;
-            //     }
-            // }
-            // else
-            // {
-            //     start_search(gs, board, 7);
-            // }
+            if (ABORT_SIGNAL == 0) return false;
 
             searchparams_t cur_search = infinite_search;
             uint64_t perft_depth = 1;

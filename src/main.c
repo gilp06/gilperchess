@@ -16,10 +16,10 @@ int main() {
         exit(1);
     }
 
-    for (int i = 0; i < 16; i++) {
-        printf("HL biases: %d\n", NNUE.feature_biases.values[i]);
-    }
-    printf("output bias: %d\n", NNUE.output_bias);
+    // for (int i = 0; i < 16; i++) {
+    //     printf("HL biases: %d\n", NNUE.feature_biases.values[i]);
+    // }
+    // printf("output bias: %d\n", NNUE.output_bias);
 
     init_pext_table();
 

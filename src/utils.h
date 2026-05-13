@@ -1,7 +1,7 @@
 #pragma once
 
 #include <stdint.h>
-#include <time.h>
+#include <sys/time.h>
 
 #include "types.h"
 
@@ -55,7 +55,7 @@ void print_pieces(piece_t *board);
 static inline double get_real_time() {
     struct timeval tv;
     double secsInMilli, usecsInMilli;
-    mingw_gettimeofday(&tv, NULL);
+    gettimeofday(&tv, NULL);
     secsInMilli = ((double)tv.tv_sec) * 1000.0;
     usecsInMilli = tv.tv_usec / 1000.0;
     return secsInMilli + usecsInMilli;

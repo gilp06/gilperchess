@@ -25,6 +25,7 @@ const searchparams_t infinite_search = {.movetime = 0,
                                         .movestogo = 0};
 
 #define THREAD_COUNT 1
+#define CHECKMATE 30000
 
 sthreaddata_t td[THREAD_COUNT];
 pthread_t pts[THREAD_COUNT - 1]; // reuse main search thread
@@ -52,6 +53,19 @@ static bool should_abort(const sthreaddata_t *td) {
     return false;
 }
 
+
+static int convert_mate(int16_t score) {
+    if (score > CHECKMATE - 1024) {
+        int ply_to_mate = CHECKMATE - score;
+        return (ply_to_mate+1)/2;
+    }
+    if (score < -CHECKMATE + 1024) {
+        int ply_to_mate = score + CHECKMATE;
+        return -(((-ply_to_mate) + 1) / 2);
+    }
+    return 0;
+}
+
 static searchlimits_t gen_limits(searchparams_t *params, side_t side_to_move) {
 
     searchlimits_t limits;
@@ -72,7 +86,7 @@ static searchlimits_t gen_limits(searchparams_t *params, side_t side_to_move) {
         } else {
             if (params->binc != 0) {
                 limits.time += params->binc / 2;
-            }
+             }
             if (params->btime != 0) {
                 limits.time += params->btime / 20;
             }
@@ -191,14 +205,27 @@ void *search(void *arg) {
 
         // output info (should probably include the sum of all node counts)
         double cur_time = get_real_time() - td->gs->start_time;
-        printf("info nodes %llu depth %d score cp %d time %llu pv ",
-               td[0].nodes, td[0].depth_finished, td[0].score,
+        printf("info nodes %llu depth %d time %llu ",
+               td[0].nodes, td[0].depth_finished,
                (uint64_t)cur_time);
+
+        int mate = convert_mate(td->score);
+        if (mate != 0) {
+            printf("score mate %d pv ", mate);
+            ABORT_SIGNAL = 1;
+        } else {
+            printf("score cp %d pv ", td->score);
+        }
+
+        
         for (int i = 0; i < td[0].pv_length[0]; i++) {
             char move_buf[6];
             move_to_string(td[0].pv_array[0][i], move_buf);
             printf("%s ", move_buf);
         }
+
+        
+        
         printf("\n");
         fflush(stdout);
     }
@@ -330,7 +357,7 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
 
     if (played == 0) {
         if (incheck)
-            return INT16_MIN + ply + 1;
+            return -CHECKMATE + ply;
         else
             return 0;
     }
@@ -438,7 +465,7 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
 
     if (played == 0) {
         if (incheck)
-            return INT16_MIN + 1 + ply;
+            return -CHECKMATE + ply;
     }
 
     entry.depth = 0;

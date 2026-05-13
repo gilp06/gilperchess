@@ -69,29 +69,32 @@ static int16_t king_end_table[64] = {
     -30, -30, -10, 20,  30,  30,  20,  -10, -30, -30, -30, 0,   0,
     0,   0,   -30, -30, -50, -30, -30, -30, -30, -30, -30, -50};
 
-// int16_t evaluate_from_scratch(board_t *board) {
+int16_t evaluate(board_t *board) {
 
-//     accumulator_t white_accum = NNUE.feature_biases;
-//     accumulator_t black_accum = NNUE.feature_biases;
+    //  accumulator_t white_accum = NNUE.feature_biases;
+    //  accumulator_t black_accum = NNUE.feature_biases;
 
-//     for (bindex_t sq = 0; sq < 64; sq++) {
-//         piece_t piece = board->pieces_at[sq];
-//         if (piece == PIECE_NONE)
-//             continue;
+    //  for (bindex_t sq = 0; sq < 64; sq++) {
+    //      piece_t piece = board->pieces_at[sq];
+    //      if (piece == PIECE_NONE)
+    //          continue;
 
-//         assert(piece != PIECE_NONE);
-//         piecetype_t pt = piece_type(piece);
-//         side_t ps = piece_side(piece);
-//         int windex = calculate_chess768_index(SIDE_WHITE, sq, pt, ps);
-//         accum_add_feat(&NNUE, windex, &white_accum);
-//         int bindex = calculate_chess768_index(SIDE_BLACK, sq, pt, ps);
-//         accum_add_feat(&NNUE, bindex, &black_accum);
-//     }
-
-//     if (board->side_to_move == SIDE_WHITE)
-//         return evaluate_nnue(&NNUE, &white_accum, &black_accum);
-//     return evaluate_nnue(&NNUE, &black_accum, &white_accum);
-// }
+    //      assert(piece != PIECE_NONE);
+    //      // nnue_add_piece(board, sq, piece);
+    //      piecetype_t pt = piece_type(piece);
+    //      side_t ps = piece_side(piece);
+    //      int windex = calculate_chess768_index(SIDE_WHITE, sq, pt, ps);
+    //      accum_add_feat(&NNUE, windex, &white_accum);
+    //      int bindex = calculate_chess768_index(SIDE_BLACK, sq, pt, ps);
+    //      accum_add_feat(&NNUE, bindex, &black_accum);
+        
+    // }
+    
+    
+    if (board->side_to_move == SIDE_WHITE)
+        return evaluate_nnue(&NNUE, &board->white_accum, &board->black_accum);
+    return evaluate_nnue(&NNUE, &board->black_accum, &board->white_accum);
+}
 
 // int16_t evaluate(board_t *board) {
 //     int16_t val;
@@ -126,7 +129,7 @@ static int16_t king_end_table[64] = {
 
 //     return val;
 // }
-int16_t evaluate(board_t *board) {
+int16_t evaluate_hce(board_t *board) {
     int eval = 0;
 
     int queens = __builtin_popcountll(board->pieces_occ[PIECETYPE_QUEEN]);

@@ -5,7 +5,7 @@
 
 // C implementation of the NNUE from the bullet-lib simple.rs examples
 
-#define HIDDEN_SIZE 64
+#define HIDDEN_SIZE 128
 #define SCALE 400
 #define QA 255
 #define QB 64

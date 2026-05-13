@@ -529,7 +529,7 @@ static void undo_ep(board_t *board, dstate_t *undo) {
 
     piece_t pc = pieces_at[to];
     piecetype_t pc_type = piece_type(pc);
-    piece_t captured = undo->captured;
+    piece_t captured = make_piece(PIECETYPE_PAWN, them);
 
     bb_t move_bb = (1ULL << from) | (1ULL << to);
 
@@ -543,9 +543,9 @@ static void undo_ep(board_t *board, dstate_t *undo) {
     board->pieces_occ[PIECETYPE_PAWN] ^= (1ULL << cs);
     board->sides_occ[them] ^= (1ULL << cs);
 
-    nnue_add_piece(board, to, pc);
-    nnue_remove_piece(board, from, pc);
-    nnue_remove_piece(board, cs, captured);
+    nnue_remove_piece(board, to, pc);
+    nnue_add_piece(board, from, pc);
+    nnue_add_piece(board, cs, captured);
 }
 
 static void undo_castling(board_t *board, dstate_t *undo) {

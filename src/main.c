@@ -11,7 +11,7 @@
 int main() {
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    if (!load_nnue("nnue/beans.bin")) {
+    if (!load_nnue("nnue/quantised.bin")) {
         printf("failed to load NNUE!\n");
         exit(1);
     }

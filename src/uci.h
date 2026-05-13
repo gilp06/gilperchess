@@ -21,7 +21,3 @@ typedef enum e_uci_command {
     COMMAND_EVAL,
     COMMAND_NONE,
 } uci_command_t;
-
-typedef enum e_uci_go {
-    GO_PERFT,
-} uci_go_t;

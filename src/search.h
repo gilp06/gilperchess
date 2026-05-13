@@ -51,7 +51,9 @@ typedef struct s_sthreaddata {
 
     move_t pv_array[MAX_DEPTH][MAX_DEPTH];
     uint8_t pv_length[MAX_DEPTH];
+
     move_t pvs[MAX_DEPTH];
+    uint8_t tdpv_len;
     
     int16_t depth_finished;
 

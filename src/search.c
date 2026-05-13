@@ -189,15 +189,10 @@ void *search(void *arg) {
         }
 
         int16_t score = alphabeta(td, true, cur_depth, alpha, beta, 0);
-        // bool missed = false;
-        if (score < alpha) {
-            // missed = true;
-            memset(td->pv_length, 0, sizeof(td->pv_length));
+        if (score <= alpha) {
             alpha = -INT16_MAX;
             score = alphabeta(td, true, cur_depth, alpha, beta, 0);
-        } else if (score > beta) {
-            // missed = true;        
-            memset(td->pv_length, 0, sizeof(td->pv_length));
+        } else if (score >= beta) {
             beta = INT16_MAX;
             score = alphabeta(td, true, cur_depth, alpha, beta, 0);
         }
@@ -246,6 +241,9 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     globalstate_t *gs = td->gs;
     board_t *board = &td->board;
 
+    td->pv_length[ply] = 0; 
+
+
     if (ABORT_SIGNAL || should_abort(td)) {
         longjmp(td->jmp, 1);
     }
@@ -292,7 +290,7 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
         dstate_t undo;
         perform_null_move(board, &undo);
         int16_t score =
-            -alphabeta(td, false, depth - 1 - R, -beta, -(beta - 1), ply);
+            -alphabeta(td, false, depth - 1 - R, -beta, -(beta - 1), ply+1);
         undo_null_move(board, &undo);
         if (score >= beta) {
             return score;

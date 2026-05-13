@@ -178,7 +178,6 @@ void *search(void *arg) {
 
     int16_t cur_depth = 1;
     while (1) {
-        memset(td->pv_array, 0, sizeof(td->pv_array));
         memset(td->pv_length, 0, sizeof(td->pv_length));
         if (setjmp(td->jmp))
             break;
@@ -193,10 +192,12 @@ void *search(void *arg) {
         // bool missed = false;
         if (score < alpha) {
             // missed = true;
+            memset(td->pv_length, 0, sizeof(td->pv_length));
             alpha = -INT16_MAX;
             score = alphabeta(td, true, cur_depth, alpha, beta, 0);
         } else if (score > beta) {
-            // missed = true;
+            // missed = true;        
+            memset(td->pv_length, 0, sizeof(td->pv_length));
             beta = INT16_MAX;
             score = alphabeta(td, true, cur_depth, alpha, beta, 0);
         }
@@ -381,9 +382,9 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
         write_tt_entry(&gs->transposition_table, entry);
     }
 
-    if (td->pv_length[ply] == 0) {
-        store_pv(ply, best_move, td);
-    }
+    // if (td->pv_length[ply] == 0) {
+    //     store_pv(ply, best_move, td);
+    // }
 
     return best_value;
 }

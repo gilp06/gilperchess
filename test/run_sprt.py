@@ -5,7 +5,8 @@ import shlex
 FASTCHESS = "fastchess"
 
 ENGINE_NEW = "../build/gilperchess.exe"
-ENGINE_BASE = "../../gilperchess-master/build/gilperchess.exe"
+ENGINE_BASE = "../build/gilperchess.exe"
+# ENGINE_BASE = "../../gilperchess-master/build/gilperchess.exe"
 
 BOOK = "./books/8moves_v3.pgn"
 

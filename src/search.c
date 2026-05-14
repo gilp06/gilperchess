@@ -195,6 +195,9 @@ void *search(void *arg) {
 
     int16_t cur_depth = 1;
     while (1) {
+
+        if (cur_depth >= MAX_DEPTH) break;
+        
         memset(td->pv_length, 0, sizeof(td->pv_length));
         if (setjmp(td->jmp))
             break;
@@ -274,7 +277,7 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     globalstate_t *gs = td->gs;
     board_t *board = &td->board;
 
-    td->pv_length[ply] = 0;
+
 
     if (ABORT_SIGNAL || should_abort(td)) {
         longjmp(td->jmp, 1);
@@ -289,6 +292,12 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
 
     int16_t eval = evaluate(board);
 
+    if (ply >= MAX_DEPTH) {
+        return eval;
+    }
+
+    td->pv_length[ply] = 0;
+
     if (is_draw(board)) {
         return 0;
     }
@@ -297,9 +306,6 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
 
     if (!root_node) {
 
-        if (ply >= MAX_DEPTH) {
-            return eval;
-        }
 
         tt_entry_t entry =
             get_tt_entry(&gs->transposition_table, board->st.key);
@@ -312,6 +318,7 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
                     (entry.flag == UPPERBOUND && tt_score <= alpha))
                     return tt_score;
             }
+
 
             tt_move = entry.bestmove;
         }
@@ -384,6 +391,12 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
                 value =
                     -alphabeta(td, false, depth - 1, -beta, -alpha, ply + 1);
             }
+        }
+
+
+        // verify that signature matches
+        if (generate_key_from_scratch(board) != board->st.key) {
+            printf("invalid key!\n");
         }
 
         undo_move(board, &undo);

@@ -13,7 +13,8 @@ CMakeUserPresets.json
 build
 .cache
 .clang-format
-test
+test/*
+!test/run_sprt.py
 
 
 # CLion

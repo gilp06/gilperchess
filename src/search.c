@@ -297,6 +297,10 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
 
     if (!root_node) {
 
+        if (ply >= MAX_DEPTH) {
+            return eval;
+        }
+
         tt_entry_t entry =
             get_tt_entry(&gs->transposition_table, board->st.key);
         if (entry.flag != INVALID && entry.hash == board->st.key) {
@@ -333,6 +337,7 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
                 return score;
             }
         }
+
     }
 
     moveselect_t move_select;
@@ -441,6 +446,12 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
     }
 
     td->nodes++;
+
+
+    
+    if (ply >= MAX_DEPTH) {
+        return evaluate(board);
+    }
 
     move_t tt_move = 0, best_move = 0;
     tt_entry_t entry = get_tt_entry(&gs->transposition_table, board->st.key);

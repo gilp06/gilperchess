@@ -7,21 +7,23 @@
 #include "board.h"
 #include "move_gen.h"
 #include "hashtable.h"
+#include "move_select.h"
 #include "types.h"
 
 static inline uint64_t perft(board_t *b, int depth) {
-    move_t moves[256];
-    size_t move_count = 0;
     uint64_t nodes = 0;
 
     if (depth == 0) {
         return 1ULL;
     }
 
-    generate_pseudolegal_moves(b, b->side_to_move, moves, &move_count, false);
+    move_t moves[256];
+    size_t quiet_count = 0, loud_count = 0;
+    generate_pseudolegal_moves(b, b->side_to_move, moves, &quiet_count, true);
+    generate_pseudolegal_moves(b, b->side_to_move, moves + quiet_count, &loud_count, false);
 
     if (depth == 1) {
-        for (size_t i = 0; i < move_count; i++) {
+        for (size_t i = 0; i < quiet_count + loud_count; i++) {
             dstate_t undo;
             if (perform_move(b, moves[i], &undo))
                 nodes++;
@@ -30,7 +32,7 @@ static inline uint64_t perft(board_t *b, int depth) {
         return nodes;
     }
 
-    for (int i = 0; i < move_count; i++) {
+    for (int i = 0; i < quiet_count + loud_count; i++) {
         dstate_t undo;
         if (perform_move(b, moves[i], &undo)) {
             uint64_t key = b->st.key;
@@ -53,12 +55,12 @@ static inline void perft_top(board_t *b, int depth) {
     clock_gettime(CLOCK_MONOTONIC, &start);
 
     move_t moves[256];
-    size_t move_count = 0;
+    size_t quiet_count = 0, loud_count = 0;
     uint64_t nodes = 0;
     uint64_t node_total = 0;
-
-    generate_pseudolegal_moves(b, b->side_to_move, moves, &move_count, false);
-    for (int i = 0; i < move_count; i++) {
+    generate_pseudolegal_moves(b, b->side_to_move, moves, &quiet_count, true);
+    generate_pseudolegal_moves(b, b->side_to_move, moves + quiet_count, &loud_count, false);
+    for (int i = 0; i < quiet_count + loud_count; i++) {
         dstate_t undo;
         if (perform_move(b, moves[i], &undo)) {
 

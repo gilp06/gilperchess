@@ -1,4 +1,8 @@
+#include <stdlib.h>
+#include <string.h>
+
 #include "move_select.h"
+#include "move_gen.h"
 
 static const uint8_t MVV_LVA[7][7] = {
     {15, 14, 13, 12, 11, 10, 0}, {25, 24, 23, 22, 21, 20, 0},
@@ -93,33 +97,37 @@ bool see(board_t *board, move_t move, int16_t threshold) {
     return res;
 }
 
-static int16_t score_move(board_t *board, move_t move) {
+static int16_t score_move(board_t *board, moveselect_t* ms, move_t move) {
     piece_t from = board->pieces_at[move_from(move)];
     piece_t to = board->pieces_at[move_to(move)];
-    if (to == PIECE_NONE)
+    if (to == PIECE_NONE) {
+        if(move == ms->killer[0]) return 9000;        
+        if(move == ms->killer[1]) return 8000;
         return 0;
+    }
 
     int16_t offset = MVV_LVA[piece_type(to)][piece_type(from)];
-    if (see(board, move, 0))
-        offset += 1000;
-    else
-        offset -= 1000;
     
 
     return offset;
 }
 
-void score_moves(board_t *board, moveselect_t *move_select) {
-    for (int i = 0; i < move_select->count; i++) {
-        move_select->move_scores[i] = score_move(board, move_select->moves[i]);
+void score_moves(board_t *board, moveselect_t *move_select, size_t start, size_t end) {
+    for (int i = start; i < end; i++) {
+        move_select->move_scores[i] = score_move(board, move_select, move_select->moves[i]);
     }
 }
 
 void init_select(board_t *board, moveselect_t *move_select, move_t tt_move,
-                 bool nonquiet_only) {
-    move_select->phase = (tt_move != 0) ? TT_MOVE : GEN_MOVES;
+                 move_t killers[2], selecttype_t type) {
+    move_select->phase = (tt_move != 0) ? TT_MOVE : (type != ALL_QUIET) ? GEN_LOUD : GEN_QUIET;
     move_select->tt_move = tt_move;
-    move_select->nonquiet_only = nonquiet_only;
+    move_select->select_type = type;
+    move_select->loud_count = 0;
+    move_select->quiet_count = 0;
+    move_select->quiet_offset = 0;
+    move_select->killer[0] = killers[0];
+    move_select->killer[1] = killers[1];
 }
 
 // from ethereal, i like this
@@ -143,37 +151,93 @@ static move_t pop_move(size_t *length, move_t *moves, int16_t *scores,
     return popped;
 }
 
+// static size_t get_index(size_t *length, move_t *moves, move_t move) {
+//     // returns length if not found
+//     for (size_t i = 0; i < *length; i++) {
+//         if (moves[i] == move) {
+//             return i;
+//         }
+//     }
+//     return *length;
+// }
+
 move_t select_move(board_t *board, moveselect_t *ms) {
 
     move_t *moves = ms->moves;
     int16_t *scores = ms->move_scores;
 
     move_t best_move = 0;
+    size_t best;
 
     switch (ms->phase) {
+        case TT_MOVE:
+            // printf("tt move\n");
+            ms->phase = GEN_LOUD;
+            return ms->tt_move;
+        case GEN_LOUD:
+            // printf("gen loud\n");
+            generate_pseudolegal_moves(board, board->side_to_move, moves, &ms->loud_count, false);
+            score_moves(board, ms, 0, ms->loud_count);
+            ms->quiet_offset = ms->loud_count;
+            ms->phase = GOOD_LOUD_MOVES;
+        case GOOD_LOUD_MOVES:
+            while (ms->loud_count) {
+            // printf("gen loud moves\n");
+                best = get_best(ms, 0, ms->loud_count);
 
-    case TT_MOVE:
-        ms->phase = GEN_MOVES;
-        return ms->tt_move;
-        // next case
-    case GEN_MOVES:
-        generate_pseudolegal_moves(board, board->side_to_move, ms->moves,
-                                   &ms->count, ms->nonquiet_only);
-        score_moves(board, ms);
-        ms->phase = MOVES;
-    case MOVES:
-        while (ms->count > 0) {
-            size_t best = get_best(ms, 0, ms->count);
-            // fetch move
-            best_move = pop_move(&ms->count, moves, scores, best);
-            if (best_move == ms->tt_move)
-                continue;
-            return best_move;
-        }
-        ms->phase = DONE;
-    case DONE:
-        return 0;
-    default:
-        return 0;
+                if (ms->move_scores[best] < 0)
+                    break; // looking at bad loud moves
+
+                if (!see(board, ms->moves[best], 0)) {
+                    ms->move_scores[best] = -1;
+                    continue;
+                }
+
+                best_move = pop_move(&ms->loud_count, moves, scores, best);
+                if (best_move == ms->tt_move)
+                    continue;
+
+                return best_move;
+            }
+
+            if (ms->select_type == NON_QUIET) {
+                ms->phase = BAD_LOUD_MOVES;
+                return select_move(board, ms);
+            }
+
+            ms->phase = GEN_QUIET;
+
+        case GEN_QUIET:
+            // printf("gen quiet moves\n");
+            if (ms->select_type != NON_QUIET) {
+                generate_pseudolegal_moves(board, board->side_to_move, moves + ms->quiet_offset, &ms->quiet_count, true);
+                score_moves(board, ms, ms->quiet_offset, ms->quiet_offset + ms->quiet_count);
+            }
+            ms->phase = QUIET_MOVES;
+        case QUIET_MOVES:
+            while (ms->select_type != NON_QUIET && ms->quiet_count) {
+                best = get_best(ms, ms->quiet_offset, ms->quiet_offset + ms->quiet_count);
+                best_move = pop_move(&ms->quiet_count, moves + ms->quiet_offset, scores + ms->quiet_offset, best - ms->quiet_offset);
+                if (best_move == ms->tt_move) continue;
+                return best_move;
+            }
+            
+            ms->phase = BAD_LOUD_MOVES;
+        case BAD_LOUD_MOVES:
+            // printf("bad loud moves\n");
+            while(ms->loud_count) {
+                best_move = pop_move(&ms->loud_count, moves, scores, 0);
+
+                if (best_move == ms->tt_move)
+                    continue;
+
+                return best_move;
+            }
+            ms->phase = DONE;
+        case DONE:
+            // printf("done!\n");
+            return 0;
+        default:
+            return 0;
     }
 }

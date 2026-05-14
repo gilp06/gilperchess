@@ -207,12 +207,14 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
             while ((tok = strtok_r(NULL, " \n", &last))) {
                 // generate moves
                 move_t moves[256];
-                size_t count = 0;
+                size_t quiet_count = 0, loud_count = 0;
                 generate_pseudolegal_moves(board, board->side_to_move, moves,
-                                           &count, false);
+                                           &quiet_count, false);
+                generate_pseudolegal_moves(board, board->side_to_move, moves+quiet_count,
+                                           &loud_count, true);
                 bool found = false;
 
-                for (int i = 0; i < count; i++) {
+                for (int i = 0; i < quiet_count + loud_count; i++) {
                     // find a move that matches our string
                     char move_str[6];
                     move_to_string(moves[i], move_str);

@@ -5,8 +5,8 @@ import shlex
 FASTCHESS = "fastchess"
 
 ENGINE_NEW = "../build/gilperchess.exe"
-ENGINE_BASE = "../build/gilperchess.exe"
-# ENGINE_BASE = "../../gilperchess-master/build/gilperchess.exe"
+# ENGINE_BASE = "../build/gilperchess.exe"
+ENGINE_BASE = "../../gilperchess-master/build/gilperchess.exe"
 
 BOOK = "./books/8moves_v3.pgn"
 
@@ -16,9 +16,9 @@ TC = "1+0.1"
 # HASH = 128
 
 ELO0 = 0
-ELO1 = 2.5
+ELO1 = 10
 ALPHA = 0.05
-BETA = 0.05
+BETA = 0.1
 
 CONCURRENCY = 8
 ROUNDS = 10000

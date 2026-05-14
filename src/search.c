@@ -82,6 +82,12 @@ static inline int16_t score_from_tt(int16_t score, int16_t ply) {
     return score;
 }
 
+static inline void store_killer(sthreaddata_t *td, move_t move, int ply) {
+    if (td->killers[ply][0] != move) {
+        td->killers[ply][1] = td->killers[ply][0];
+        td->killers[ply][0] = move;
+    }
+}
 static searchlimits_t gen_limits(searchparams_t *params, side_t side_to_move) {
 
     searchlimits_t limits;
@@ -154,6 +160,7 @@ void search_bestmove(globalstate_t *gs, board_t const *starting_board) {
         td[i].nodes = 0;
         memset(td[i].pv_length, 0, sizeof(td[i].pv_length));
         memset(td[i].pv_array, 0, sizeof(td[i].pv_array));
+        memset(td->killers, 0, sizeof(td->killers));
     }
 
     // identify main thread
@@ -196,8 +203,9 @@ void *search(void *arg) {
     int16_t cur_depth = 1;
     while (1) {
 
-        if (cur_depth >= MAX_DEPTH) break;
-        
+        if (cur_depth >= MAX_DEPTH)
+            break;
+
         memset(td->pv_length, 0, sizeof(td->pv_length));
         if (setjmp(td->jmp))
             break;
@@ -277,8 +285,6 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     globalstate_t *gs = td->gs;
     board_t *board = &td->board;
 
-
-
     if (ABORT_SIGNAL || should_abort(td)) {
         longjmp(td->jmp, 1);
     }
@@ -306,7 +312,6 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
 
     if (!root_node) {
 
-
         tt_entry_t entry =
             get_tt_entry(&gs->transposition_table, board->st.key);
         if (entry.flag != INVALID && entry.hash == board->st.key) {
@@ -318,7 +323,6 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
                     (entry.flag == UPPERBOUND && tt_score <= alpha))
                     return tt_score;
             }
-
 
             tt_move = entry.bestmove;
         }
@@ -344,11 +348,10 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
                 return score;
             }
         }
-
     }
 
     moveselect_t move_select;
-    init_select(board, &move_select, tt_move, false);
+    init_select(board, &move_select, tt_move, td->killers[ply], BOTH_TYPES);
 
     int16_t best_value = INT16_MIN;
     int16_t played = 0;
@@ -373,9 +376,11 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
         if (played == 1) {
             value = -alphabeta(td, false, depth - 1, -beta, -alpha, ply + 1);
         }
-        // late move pruning
+        // late move pruning, don't reduce on killers
         else if (depth >= 3 && played >= 4 && !pv_node && !incheck &&
-                 !iscapture && (move_type(cur_move) != PROMOTION)) {
+                 !iscapture && (move_type(cur_move) != PROMOTION) &&
+                 cur_move != td->killers[ply][0] &&
+                 cur_move != td->killers[ply][1]) {
             value =
                 -alphabeta(td, false, depth - 2, -alpha - 1, -alpha, ply + 1);
             if (value > alpha) {
@@ -393,7 +398,6 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
             }
         }
 
-
         // verify that signature matches
         if (generate_key_from_scratch(board) != board->st.key) {
             printf("invalid key!\n");
@@ -409,6 +413,9 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
                 store_pv(ply, best_move, td);
                 alpha = value;
                 if (alpha >= beta) {
+                    if (!iscapture && move_type(cur_move) != PROMOTION) {
+                        store_killer(td, best_move, ply);
+                    }
                     break;
                 }
             }
@@ -460,8 +467,6 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
 
     td->nodes++;
 
-
-    
     if (ply >= MAX_DEPTH) {
         return evaluate(board);
     }
@@ -498,9 +503,11 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
     }
 
     moveselect_t move_select;
+    selecttype_t type = incheck ? BOTH_TYPES : NON_QUIET;
 
     int32_t played = 0;
-    init_select(&td->board, &move_select, tt_move, !incheck);
+    move_t none_killers[2] = {0, 0};
+    init_select(&td->board, &move_select, tt_move, none_killers, type);
 
     while (true) {
         move_t cur_move = select_move(board, &move_select);
@@ -527,8 +534,9 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
             if (score > alpha) {
                 alpha = score;
             }
-            if (alpha >= beta)
+            if (alpha >= beta) {
                 break;
+            }
         }
     }
 

@@ -54,6 +54,8 @@ typedef struct s_sthreaddata {
 
     move_t pvs[MAX_DEPTH];
     uint8_t tdpv_len;
+
+    move_t killers[MAX_DEPTH][2];
     
     int16_t depth_finished;
 

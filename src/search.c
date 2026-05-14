@@ -373,8 +373,18 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
         }
         played++;
 
+
+        bool caused_check =
+            in_check(board, board->side_to_move); // check if enemy is in check
+        int16_t cur_depth = depth;
+        if (caused_check) {
+            if (see(board, cur_move, 0)) {
+                cur_depth++;
+            }
+        }
+
         if (played == 1) {
-            value = -alphabeta(td, false, depth - 1, -beta, -alpha, ply + 1);
+            value = -alphabeta(td, false, cur_depth - 1, -beta, -alpha, ply + 1);
         }
         // late move pruning, don't reduce on killers
         else if (depth >= 3 && played >= 4 && !pv_node && !incheck &&
@@ -382,19 +392,19 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
                  cur_move != td->killers[ply][0] &&
                  cur_move != td->killers[ply][1]) {
             value =
-                -alphabeta(td, false, depth - 2, -alpha - 1, -alpha, ply + 1);
+                -alphabeta(td, false, cur_depth - 2, -alpha - 1, -alpha, ply + 1);
             if (value > alpha) {
                 value =
-                    -alphabeta(td, false, depth - 1, -beta, -alpha, ply + 1);
+                    -alphabeta(td, false, cur_depth - 1, -beta, -alpha, ply + 1);
             }
         }
         // PVS search
         else {
             value =
-                -alphabeta(td, false, depth - 1, -alpha - 1, -alpha, ply + 1);
+                -alphabeta(td, false, cur_depth - 1, -alpha - 1, -alpha, ply + 1);
             if (pv_node && value > alpha) {
                 value =
-                    -alphabeta(td, false, depth - 1, -beta, -alpha, ply + 1);
+                    -alphabeta(td, false, cur_depth - 1, -beta, -alpha, ply + 1);
             }
         }
 

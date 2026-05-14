@@ -110,3 +110,6 @@ static inline void nnue_remove_piece(board_t *board, bindex_t sq,
     int bindex = calculate_chess768_index(SIDE_BLACK, sq, pt, ps);
     accum_remove_feat(&NNUE, bindex, &board->black_accum);
 }
+
+
+

@@ -16,7 +16,7 @@ TC = "1+0.1"
 # HASH = 128
 
 ELO0 = 0
-ELO1 = 10
+ELO1 = 5
 ALPHA = 0.05
 BETA = 0.1
 

@@ -32,8 +32,8 @@ cmd = f"""
 -rounds {ROUNDS}
 -repeat
 -concurrency {CONCURRENCY}
--recover
 -pgnout file="games.pgn"
+-log engine=true file="log.txt"
 """
 
 cmd = " ".join(cmd.split())

@@ -312,27 +312,27 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
             tt_move = entry.bestmove;
         }
 
-        // if (depth <= 3 && !incheck && eval + (150 + 100 * depth) < alpha) {
-        //     int16_t qscore = qsearch(td, alpha, beta, ply + 1);
-        //     if (qscore < alpha)
-        //         return qscore;
-        // }
+        if (depth <= 3 && !incheck && eval + (150 + 100 * depth) < alpha) {
+            int16_t qscore = qsearch(td, alpha, beta, ply + 1);
+            if (qscore < alpha)
+                return qscore;
+        }
 
         if (depth == 0)
             // return eval;
             return qsearch(td, alpha, beta, ply + 1);
 
-        // if (depth >= 3 && !incheck && !pv_node) {
-        //     int16_t R = 3 + depth / 6;
-        //     dstate_t undo;
-        //     perform_null_move(board, &undo);
-        //     int16_t score = -alphabeta(td, false, depth - 1 - R, -beta,
-        //                                -(beta - 1), ply + 1);
-        //     undo_null_move(board, &undo);
-        //     if (score >= beta) {
-        //         return score;
-        //     }
-        // }
+        if (depth >= 3 && !incheck && !pv_node) {
+            int16_t R = 3 + depth / 6;
+            dstate_t undo;
+            perform_null_move(board, &undo);
+            int16_t score = -alphabeta(td, false, depth - 1 - R, -beta,
+                                       -(beta - 1), ply + 1);
+            undo_null_move(board, &undo);
+            if (score >= beta) {
+                return score;
+            }
+        }
     }
 
     moveselect_t move_select;
@@ -418,9 +418,14 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
         write_tt_entry(&gs->transposition_table, entry);
     }
 
-    // if (td->pv_length[ply] == 0) {
-    //     store_pv(ply, best_move, td);
-    // }
+    if (root_node && td->pv_length[ply] == 0) {
+        if (best_move != 0)
+            store_pv(ply, best_move, td);
+        else {
+            printf("failed to find move! terminating!\n");
+            exit(1);
+        }
+    }
 
     return best_value;
 }

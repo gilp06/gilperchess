@@ -42,11 +42,12 @@ static void store_pv(int ply, move_t move, sthreaddata_t *td) {
 static bool should_abort(const sthreaddata_t *td) {
     searchlimits_t limits = td->gs->limits;
 
-    if (td->depth_finished > 0 && (td->nodes & 1023) == 1023 &&
-        ((limits.depth != 0 && td->depth_finished == limits.depth) ||
-         (limits.time != 0 &&
-          (get_real_time() - td->gs->start_time) >= limits.time) ||
-         (limits.nodes != 0 && td->nodes >= limits.nodes / THREAD_COUNT))) {
+    if (((td->depth_finished > 0 && (td->nodes & 1023) == 1023) &&
+         ((limits.depth != 0 && td->depth_finished >= limits.depth) ||
+          td->depth_finished >= MAX_DEPTH)) ||
+        (limits.time != 0 &&
+         (get_real_time() - td->gs->start_time) >= limits.time) ||
+        (limits.nodes != 0 && td->nodes >= limits.nodes / THREAD_COUNT)) {
 
         return true;
     }
@@ -54,15 +55,31 @@ static bool should_abort(const sthreaddata_t *td) {
 }
 
 static int convert_mate(int16_t score) {
-    if (score > CHECKMATE - 1024) {
+    if (score > CHECKMATE - 1000) {
         int ply_to_mate = CHECKMATE - score;
         return (ply_to_mate + 1) / 2;
     }
-    if (score < -CHECKMATE + 1024) {
+    if (score < -CHECKMATE + 1000) {
         int ply_to_mate = score + CHECKMATE;
-        return -(((-ply_to_mate) + 1) / 2);
+        return -(((ply_to_mate) + 1) / 2);
     }
-    return 0;
+    return INT16_MAX;
+}
+
+static inline int16_t score_to_tt(int16_t score, int16_t ply) {
+    if (score > CHECKMATE - 1000)
+        return score + ply;
+    if (score < -CHECKMATE + 1000)
+        return score - ply;
+    return score;
+}
+
+static inline int16_t score_from_tt(int16_t score, int16_t ply) {
+    if (score > CHECKMATE - 1000)
+        return score - ply;
+    if (score < -CHECKMATE + 1000)
+        return score + ply;
+    return score;
 }
 
 static searchlimits_t gen_limits(searchparams_t *params, side_t side_to_move) {
@@ -192,9 +209,20 @@ void *search(void *arg) {
         if (score <= alpha) {
             alpha = -INT16_MAX;
             score = alphabeta(td, true, cur_depth, alpha, beta, 0);
+
+            if (score >= beta) {
+                beta = INT16_MAX;
+                score = alphabeta(td, true, cur_depth, alpha, beta, 0);
+            }
+
         } else if (score >= beta) {
             beta = INT16_MAX;
             score = alphabeta(td, true, cur_depth, alpha, beta, 0);
+
+            if (score <= alpha) {
+                alpha = -INT16_MAX;
+                score = alphabeta(td, true, cur_depth, alpha, beta, 0);
+            }
         }
 
         // if (missed)
@@ -215,7 +243,7 @@ void *search(void *arg) {
                td[0].depth_finished, (uint64_t)cur_time);
 
         int mate = convert_mate(td->score);
-        if (mate != 0) {
+        if (mate != INT16_MAX) {
             printf("score mate %d pv ", mate);
             ABORT_SIGNAL = 1;
         } else {
@@ -226,6 +254,11 @@ void *search(void *arg) {
             char move_buf[6];
             move_to_string(td[0].pv_array[0][i], move_buf);
             printf("%s ", move_buf);
+        }
+
+        if (td[0].pv_length[0] == 0) {
+            printf("\nbad PV\n");
+            exit(1);
         }
 
         printf("\n");
@@ -241,8 +274,7 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     globalstate_t *gs = td->gs;
     board_t *board = &td->board;
 
-    td->pv_length[ply] = 0; 
-
+    td->pv_length[ply] = 0;
 
     if (ABORT_SIGNAL || should_abort(td)) {
         longjmp(td->jmp, 1);
@@ -262,38 +294,44 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
     }
 
     // check transposition table
-    tt_entry_t entry = get_tt_entry(&gs->transposition_table, board->st.key);
-    if (entry.flag != INVALID && entry.hash == board->st.key) {
 
-        if (entry.depth >= depth && (depth == 0 || !pv_node)) {
-            if (entry.flag == EXACT ||
-                (entry.flag == LOWERBOUND && entry.value >= beta) ||
-                (entry.flag == UPPERBOUND && entry.value <= alpha))
-                return entry.value;
+    if (!root_node) {
+
+        tt_entry_t entry =
+            get_tt_entry(&gs->transposition_table, board->st.key);
+        if (entry.flag != INVALID && entry.hash == board->st.key) {
+
+            int16_t tt_score = score_from_tt(entry.value, ply);
+            if (entry.depth >= depth && (depth == 0 || !pv_node)) {
+                if (entry.flag == EXACT ||
+                    (entry.flag == LOWERBOUND && tt_score >= beta) ||
+                    (entry.flag == UPPERBOUND && tt_score <= alpha))
+                    return tt_score;
+            }
+
+            tt_move = entry.bestmove;
         }
 
-        tt_move = entry.bestmove;
-    }
+        if (depth <= 3 && !incheck && eval + (150 + 100 * depth) < alpha) {
+            int16_t qscore = qsearch(td, alpha, beta, ply + 1);
+            if (qscore < alpha)
+                return qscore;
+        }
 
-    if (depth <= 3 && !incheck && eval + (150 + 100 * depth) < alpha) {
-        int16_t qscore = qsearch(td, alpha, beta, ply + 1);
-        if (qscore < alpha)
-            return qscore;
-    }
+        if (depth == 0)
+            // return eval;
+            return qsearch(td, alpha, beta, ply + 1);
 
-    if (depth == 0)
-        // return eval;
-        return qsearch(td, alpha, beta, ply + 1);
-
-    if (depth >= 3 && !incheck && !pv_node) {
-        int16_t R = 3 + depth / 6;
-        dstate_t undo;
-        perform_null_move(board, &undo);
-        int16_t score =
-            -alphabeta(td, false, depth - 1 - R, -beta, -(beta - 1), ply+1);
-        undo_null_move(board, &undo);
-        if (score >= beta) {
-            return score;
+        if (depth >= 3 && !incheck && !pv_node) {
+            int16_t R = 3 + depth / 6;
+            dstate_t undo;
+            perform_null_move(board, &undo);
+            int16_t score = -alphabeta(td, false, depth - 1 - R, -beta,
+                                       -(beta - 1), ply + 1);
+            undo_null_move(board, &undo);
+            if (score >= beta) {
+                return score;
+            }
         }
     }
 
@@ -371,7 +409,7 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
         tt_entry_t entry;
         entry.depth = depth;
         entry.hash = board->st.key;
-        entry.value = best_value;
+        entry.value = score_to_tt(best_value, ply);
         entry.flag = best_value >= beta         ? LOWERBOUND
                      : best_value <= alpha_orig ? UPPERBOUND
                                                 : EXACT;
@@ -403,10 +441,13 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
     tt_entry_t entry = get_tt_entry(&gs->transposition_table, board->st.key);
     if (entry.flag != INVALID && entry.hash == board->st.key) {
 
+        int16_t tt_score = score_from_tt(entry.value, ply);
+        // if (entry.depth >= depth && (depth == 0 || !pv_node)) {
         if (entry.flag == EXACT ||
-            (entry.flag == LOWERBOUND && entry.value >= beta) ||
-            (entry.flag == UPPERBOUND && entry.value <= alpha))
-            return entry.value;
+            (entry.flag == LOWERBOUND && tt_score >= beta) ||
+            (entry.flag == UPPERBOUND && tt_score <= alpha))
+            return tt_score;
+        // }
 
         tt_move = entry.bestmove;
     }
@@ -469,7 +510,7 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
 
     entry.depth = 0;
     entry.hash = board->st.key;
-    entry.value = best_val;
+    entry.value = score_to_tt(best_val, ply);
     entry.flag = best_val >= beta         ? LOWERBOUND
                  : best_val <= alpha_orig ? UPPERBOUND
                                           : EXACT;

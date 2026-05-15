@@ -23,7 +23,9 @@ const int16_t piece_values[16] = {
 };
 
 int16_t evaluate(board_t *board) {    
+    // TODO: probably make this a thing we track when we make moves
+    size_t piece_count = __builtin_popcountll(board->sides_occ[SIDE_WHITE] | board->sides_occ[SIDE_BLACK]);
     if (board->side_to_move == SIDE_WHITE)
-        return evaluate_nnue(&NNUE, &board->white_accum, &board->black_accum);
-    return evaluate_nnue(&NNUE, &board->black_accum, &board->white_accum);
+        return evaluate_nnue(&NNUE, &board->white_accum, &board->black_accum, piece_count);
+    return evaluate_nnue(&NNUE, &board->black_accum, &board->white_accum, piece_count);
 }

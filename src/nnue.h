@@ -7,6 +7,8 @@
 
 #define HIDDEN_SIZE 512
 #define SCALE 400
+#define BUCKET_COUNT 1
+#define BUCKET_DIV ((32 + BUCKET_COUNT - 1) / BUCKET_COUNT)
 #define QA 255
 #define QB 64
 
@@ -31,8 +33,8 @@ typedef struct s_nnue {
     accumulator_t feature_weights[768];
     accumulator_t feature_biases;
 
-    int16_t output_weights[2 * HIDDEN_SIZE];
-    int16_t output_bias;
+    int16_t output_weights[BUCKET_COUNT][2 * HIDDEN_SIZE];
+    int16_t output_bias[BUCKET_COUNT];
 } nnue_t;
 
 static inline accumulator_t accum_init(nnue_t *nnue) {
@@ -53,19 +55,28 @@ static inline void accum_remove_feat(nnue_t *nnue, size_t index,
     }
 }
 
+static inline size_t get_bucket(size_t piece_count) {
+    size_t bucket = (piece_count - 2) / BUCKET_DIV;
+    if (bucket >= BUCKET_COUNT)
+        return BUCKET_COUNT-1;
+    else
+        return bucket;
+}
+
 static inline int32_t evaluate_nnue(nnue_t *nnue, accumulator_t *us,
-                                    accumulator_t *them) {
+                                    accumulator_t *them, size_t piece_count) {
+    size_t bucket = get_bucket(piece_count);
     int32_t output = 0;
 
     for (int i = 0; i < HIDDEN_SIZE; i++) {
-        output += screlu(us->values[i]) * nnue->output_weights[i];
-        output += screlu(them->values[i]) * nnue->output_weights[HIDDEN_SIZE + i];
+        output += screlu(us->values[i]) * nnue->output_weights[bucket][i];
+        output += screlu(them->values[i]) * nnue->output_weights[bucket][HIDDEN_SIZE + i];
     }
 
     // printf("%d\n", output);
     
     output /= QA;
-    output += nnue->output_bias;
+    output += nnue->output_bias[bucket];
     output *= SCALE;
     output /= (QA * QB);
 

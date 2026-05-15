@@ -1,11 +1,12 @@
 #pragma once
+#include <immintrin.h>
 #include <stdalign.h>
 #include <stdint.h>
-#include <stdio.h>
+#include <stdio.h>
 
 // C implementation of the NNUE from the bullet-lib simple.rs examples
 
-#define HIDDEN_SIZE 512
+#define HIDDEN_SIZE 1024
 #define SCALE 400
 #define BUCKET_COUNT 8
 #define BUCKET_DIV ((32 + BUCKET_COUNT - 1) / BUCKET_COUNT)
@@ -58,7 +59,7 @@ static inline void accum_remove_feat(nnue_t *nnue, size_t index,
 static inline size_t get_bucket(size_t piece_count) {
     size_t bucket = (piece_count - 2) / BUCKET_DIV;
     if (bucket >= BUCKET_COUNT)
-        return BUCKET_COUNT-1;
+        return BUCKET_COUNT - 1;
     else
         return bucket;
 }
@@ -68,13 +69,52 @@ static inline int32_t evaluate_nnue(nnue_t *nnue, accumulator_t *us,
     size_t bucket = get_bucket(piece_count);
     int32_t output = 0;
 
-    for (int i = 0; i < HIDDEN_SIZE; i++) {
-        output += screlu(us->values[i]) * nnue->output_weights[bucket][i];
-        output += screlu(them->values[i]) * nnue->output_weights[bucket][HIDDEN_SIZE + i];
-    }
+    // for (int i = 0; i < HIDDEN_SIZE; i++) {
+    //     output += screlu(us->values[i]) * nnue->output_weights[bucket][i];
+    //     output += screlu(them->values[i]) *
+    //               nnue->output_weights[bucket][HIDDEN_SIZE + i];
+    // }
 
     // printf("%d\n", output);
-    
+
+    const int16_t *us_values = us->values;
+    const int16_t *them_values = them->values;
+
+    const int16_t *us_weights = nnue->output_weights[bucket];
+    const int16_t *them_weights = nnue->output_weights[bucket] + HIDDEN_SIZE;
+
+    const __m512i vec_zero = _mm512_setzero_si512();
+    const __m512i vec_qa = _mm512_set1_epi16(QA);
+    __m512i sum = vec_zero;
+
+
+    // implementation from chessprogramming wiki
+
+    for (int i = 0; i < HIDDEN_SIZE; i += 32) {
+        const __m512i usv = _mm512_load_si512((const __m512i *)(us_values + i));
+        const __m512i themv =
+            _mm512_load_si512((const __m512i *)(them_values + i));
+        const __m512i usw =
+            _mm512_load_si512((const __m512i *)(us_weights + i));
+        const __m512i themw =
+            _mm512_load_si512((const __m512i *)(them_weights + i));
+
+        const __m512i us_clamped =
+            _mm512_min_epi16(_mm512_max_epi16(usv, vec_zero), vec_qa);
+        const __m512i them_clamped =
+            _mm512_min_epi16(_mm512_max_epi16(themv, vec_zero), vec_qa);
+
+        const __m512i us_results =
+            _mm512_madd_epi16(_mm512_mullo_epi16(usw, us_clamped), us_clamped);
+        const __m512i them_results = _mm512_madd_epi16(
+            _mm512_mullo_epi16(themw, them_clamped), them_clamped);
+
+        sum = _mm512_add_epi32(sum, us_results);
+        sum = _mm512_add_epi32(sum, them_results);
+    }
+
+    output = _mm512_reduce_add_epi32(sum);
+
     output /= QA;
     output += nnue->output_bias[bucket];
     output *= SCALE;

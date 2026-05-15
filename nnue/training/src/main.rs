@@ -13,9 +13,9 @@ use bullet::{
 fn main() {
     let hl_size = 1024;
     let initial_lr = 0.0007;
-    let final_lr = 0.0007 * 0.3f32.powi(5);
-    let start_superbatch = 160;
-    let superbatches = 400;
+    let final_lr = 0.00015;
+    let start_superbatch = 401;
+    let superbatches = 800;
     let wdl_proportion = 0.75;
     const NUM_OUTPUT_BUCKETS: usize = 8; // output bucket training time bad :(
 
@@ -52,8 +52,8 @@ fn main() {
         net_id: "output_buckets_1024_8".to_string(),
         eval_scale: 400.0,
         steps: TrainingSteps {
-            batch_size: 6104,
-            batches_per_superbatch: 16384,
+            batch_size: 16384,
+            batches_per_superbatch: 8192,
             start_superbatch: start_superbatch,
             end_superbatch: superbatches,
         },
@@ -72,7 +72,7 @@ fn main() {
         threads: 2,
         test_set: None,
         output_directory: "checkpoints",
-        batch_queue_size: 128,
+        batch_queue_size: 256,
     };
 
     let dataloader = {
@@ -93,6 +93,6 @@ fn main() {
         SfBinpackLoader::new_concat_multiple(&file_paths, buffer_size_mb, threads, filter)
     };
 
-    trainer.load_from_checkpoint("checkpoints/output_buckets_1024_8-160");
+    trainer.load_from_checkpoint("checkpoints/output_buckets_1024_8-400");
     trainer.run(&schedule, &settings, &dataloader);
 }

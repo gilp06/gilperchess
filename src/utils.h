@@ -42,11 +42,17 @@ extern const uint8_t CASTLING_RIGHTS_BBOTH;
 extern uint8_t CASTLE_MASK[2][64];
 extern uint8_t CASTLE_CAPTURE_MASK[2][64];
 
+
+// indexed from -> to
+extern bb_t BETWEEN_MASK[64][64];
+
+
 bb_t fetch_bishop_moves(bindex_t square, bb_t blockers);
 bb_t fetch_rook_moves(bindex_t square, bb_t blockers);
 bb_t generate_sliding_mask(bindex_t sq, const int8_t directions[4][2],
                            bb_t blockers);
 void init_pext_table();
+void init_between_table();
 bb_t get_edge_filter(bindex_t sq);
 
 void print_bb(bb_t bboard);

@@ -376,13 +376,14 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
 
         bool caused_check =
             in_check(board, board->side_to_move); // check if enemy is in check
+        // undo_move(board, &undo);
         int16_t cur_depth = depth;
         if (caused_check) {
-            if (see(board, cur_move, 0)) {
-                cur_depth++;
-            }
+            cur_depth++;
         }
-
+        // perform_move(board, cur_move, &undo);
+        
+        
         if (played == 1) {
             value = -alphabeta(td, false, cur_depth - 1, -beta, -alpha, ply + 1);
         }

@@ -182,6 +182,10 @@ void init_board_from_fen(board_t *board, const char *str) {
     board->st.fullmove_clock = fullmove;
     board->move_number = 0;
 
+
+    update_pinners_and_blockers(board, SIDE_WHITE);
+    update_pinners_and_blockers(board, SIDE_BLACK);
+
     // INIT NNUE
 
     board->white_accum = NNUE.feature_biases;
@@ -441,6 +445,10 @@ bool perform_move(board_t *board, move_t move, dstate_t *undo) {
 
     move_handlers[mt >> 14](board, move, undo);
 
+    
+    update_pinners_and_blockers(board, SIDE_WHITE);
+    update_pinners_and_blockers(board, SIDE_BLACK);
+    
     board->side_to_move = them;
     board->st.key ^= RANDOM_64[RANDOM_TURN];
 

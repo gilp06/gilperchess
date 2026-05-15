@@ -1,18 +1,20 @@
 
+#include <pthread.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <pthread.h>
-#include <string.h>
+#include <string.h>
 
 #include "board.h"
 #include "eval.h"
 #include "hashtable.h"
 #include "move_gen.h"
+#include "move_select.h"
 #include "perft.h"
 #include "search.h"
 #include "types.h"
+#include "utils.h"
 #include "uci.h"
 
 pthread_t main_search_thread;
@@ -67,6 +69,8 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
             command = COMMAND_STOP;
         } else if (strcmp(tok, "eval") == 0) {
             command = COMMAND_EVAL;
+        } else if (strcmp(tok, "moves") == 0) {
+            command = COMMAND_MOVES;
         }
 
         switch (command) {
@@ -99,14 +103,30 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
             }
             printf("\n");
             fflush(stdout);
-            return false;        
+            return false;
         }
         case COMMAND_UCINEWGAME: {
             clear_ttable(&gs->transposition_table);
             return false;
         }
+        case COMMAND_MOVES: {
+            moveselect_t ms;
+            move_t killers[2] = {0, 0};
+            init_select(board, &ms, 0, killers, BOTH_TYPES);
+            while (true) {
+                move_t next_move = select_move(board, &ms);
+                if (next_move == 0) break;
+                else {
+                    char move_str[6];
+                    move_to_string(next_move, move_str);
+                    printf("%s\n", move_str);
+                }
+            }
+            return false;
+        }
         case COMMAND_GO: {
-            if (ABORT_SIGNAL == 0) return false;
+            if (ABORT_SIGNAL == 0)
+                return false;
 
             searchparams_t cur_search = infinite_search;
             uint64_t perft_depth = 1;
@@ -142,10 +162,12 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
                     0)
                     continue;
 
-                if(set_param("movestogo", tok, &last, &cur_search.movestogo) == 0)
+                if (set_param("movestogo", tok, &last, &cur_search.movestogo) ==
+                    0)
                     continue;
-                
-                if ((res = set_param("perft", tok, &last, &perft_depth)) == 0 || res == -1) {
+
+                if ((res = set_param("perft", tok, &last, &perft_depth)) == 0 ||
+                    res == -1) {
                     perft_top(board, perft_depth);
                     return false;
                 }
@@ -159,9 +181,10 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
             search_data.starting_board = board;
             search_data.gs = gs;
 
-            pthread_create(&main_search_thread, NULL, &go_search, (void*)&search_data);
+            pthread_create(&main_search_thread, NULL, &go_search,
+                           (void *)&search_data);
             pthread_detach(main_search_thread);
-            
+
             return false;
         }
 
@@ -210,8 +233,9 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
                 size_t quiet_count = 0, loud_count = 0;
                 generate_pseudolegal_moves(board, board->side_to_move, moves,
                                            &quiet_count, false);
-                generate_pseudolegal_moves(board, board->side_to_move, moves+quiet_count,
-                                           &loud_count, true);
+                generate_pseudolegal_moves(board, board->side_to_move,
+                                           moves + quiet_count, &loud_count,
+                                           true);
                 bool found = false;
 
                 for (int i = 0; i < quiet_count + loud_count; i++) {
@@ -257,6 +281,10 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
                 printf("\n");
                 printf("halfmove: %d, fullmove: %d\n", board->st.halfmove_clock,
                        board->st.fullmove_clock);
+                print_bb(board->st.blockers[SIDE_WHITE]);
+                print_bb(board->st.blockers[SIDE_BLACK]);
+                print_bb(board->st.pinners[SIDE_WHITE]);
+                print_bb(board->st.pinners[SIDE_BLACK]);
             }
             return false;
         }

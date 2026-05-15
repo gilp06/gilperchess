@@ -16,12 +16,13 @@ int main() {
         exit(1);
     }
 
-    // for (int i = 0; i < 16; i++) {
-    //     printf("HL biases: %d\n", NNUE.feature_biases.values[i]);
-    // }
-    // printf("output bias: %d\n", NNUE.output_bias);
 
     init_pext_table();
+    init_between_table();
+
+    // print_bb(BETWEEN_MASK[A1][B6]);
+    // print_bb(BETWEEN_MASK[B2][B4]);
+
 
     srand(time(NULL));
 

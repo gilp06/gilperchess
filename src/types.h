@@ -108,6 +108,9 @@ static inline piece_t make_piece(piecetype_t type, side_t side) {
 // piece_t make_piece(piecetype_t type, side_t side);
 
 typedef struct s_state {
+    bb_t pinners[2];
+    bb_t blockers[2];
+    
     uint64_t key;
     bindex_t ep_square;
     uint8_t castling_rights;

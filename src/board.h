@@ -111,5 +111,61 @@ static inline void nnue_remove_piece(board_t *board, bindex_t sq,
     accum_remove_feat(&NNUE, bindex, &board->black_accum);
 }
 
+// update side's pinners and !side's blockers
+static inline void update_pinners_and_blockers(board_t* board, side_t side) {
+
+    bb_t us = board->sides_occ[side];
+    bb_t them = board->sides_occ[!side];
+
+    bindex_t ksq = __builtin_ctzll(board->pieces_occ[PIECETYPE_KING] & them);
+
+    bb_t pinners = 0ULL;
+    bb_t blockers = 0ULL;
+    
+
+    bb_t rq = (board->pieces_occ[PIECETYPE_ROOK] | board->pieces_occ[PIECETYPE_QUEEN]) & us;
+    bb_t bq = (board->pieces_occ[PIECETYPE_BISHOP] | board->pieces_occ[PIECETYPE_QUEEN]) & us;
+
+    bb_t rq_candidates = ROOK_SLIDER_MASK[ksq] & rq;
+
+    while(rq_candidates) {
+        bindex_t sq = __builtin_ctzll(rq_candidates);
+        rq_candidates = (rq_candidates & (rq_candidates-1));
+
+        bb_t between = BETWEEN_MASK[ksq][sq];
+
+        bb_t our_blockers = between & us;
+        bb_t enemy_blockers = between & them;
+
+        // check if there is exactly one piece between our piece and their king and that it is their piece
+        if (!our_blockers && enemy_blockers && !(enemy_blockers & (enemy_blockers-1))) {
+            pinners |= (1ULL << sq);
+            blockers |= enemy_blockers;
+        }
+    }
+
+
+    bb_t bq_candidates = BISHOP_SLIDER_MASK[ksq] & bq;
+    
+    while(bq_candidates) {
+        bindex_t sq = __builtin_ctzll(bq_candidates);
+        bq_candidates = (bq_candidates & (bq_candidates-1));
+
+        bb_t between = BETWEEN_MASK[ksq][sq];
+
+        bb_t our_blockers = between & us;
+        bb_t enemy_blockers = between & them;
+
+        // check if there is exactly one piece between our piece and their king and that it is their piece
+        if (!our_blockers && enemy_blockers && !(enemy_blockers & (enemy_blockers-1))) {
+            pinners |= (1ULL << sq);
+            blockers |= enemy_blockers;
+        }
+    }
+
+    board->st.blockers[!side] = blockers;
+    board->st.pinners[side] = pinners;
+}
+
 
 

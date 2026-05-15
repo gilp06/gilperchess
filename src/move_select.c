@@ -43,12 +43,19 @@ bool see(board_t *board, move_t move, int16_t threshold) {
         stm = !stm;
         attackers &= occupied;
 
+
         if (!(stm_attackers = attackers & sides_occ[stm]))
             break;
 
-        // todo remove pinned pieces
+        if (board->st.pinners[!stm] & occupied) {
+            stm_attackers &= ~board->st.blockers[stm];
 
-        res ^= 1;
+            if (!stm_attackers) {
+                break;
+            }
+        }
+
+        res = !res;
 
         if ((bb = stm_attackers & pieces_occ[PIECETYPE_PAWN])) {
             if ((swap = VAL_PAWN - swap) < res) {
@@ -91,9 +98,10 @@ bool see(board_t *board, move_t move, int16_t threshold) {
                  (pieces_occ[PIECETYPE_ROOK] | pieces_occ[PIECETYPE_QUEEN]));
         }
         else {
-            return (attackers & ~sides_occ[stm]) ? res ^ 1 : res;
+            return (attackers & ~sides_occ[stm]) ? !res : res;
         }
     }
+    // printf("%d\n", res);
     return res;
 }
 

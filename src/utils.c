@@ -10,9 +10,6 @@
 const bindex_t PUSH_DIR[2] = {8, -8};
 const bb_t DOUBLE_PUSH_MASK[2][2] = {{RANK_2, RANK_4}, {RANK_7, RANK_5}};
 
-
-
-
 bindex_t ROOK_CASTLING_POS[2][2][2] = {
     {{H1, F1}, {A1, D1}},
     {{H8, F8}, {A8, D8}}}; // indexed by [side][castling_side][from/to]
@@ -31,6 +28,8 @@ const uint8_t CASTLING_RIGHTS_WBOTH = 3ULL;
 const uint8_t CASTLING_RIGHTS_BKINGSIDE = 4ULL;
 const uint8_t CASTLING_RIGHTS_BQUEENSIDE = 8ULL;
 const uint8_t CASTLING_RIGHTS_BBOTH = 12ULL;
+
+bb_t BETWEEN_MASK[64][64];
 
 uint8_t CASTLE_MASK[2][64] = {{[E1] = CASTLING_RIGHTS_WBOTH,
                                [H1] = CASTLING_RIGHTS_WKINGSIDE,
@@ -53,29 +52,15 @@ const bb_t FILE_MASKS[8] = {0x0101010101010101ULL, 0x0202020202020202ULL,
                             0x1010101010101010ULL, 0x2020202020202020ULL,
                             0x4040404040404040ULL, 0x8080808080808080ULL};
 
-
 const brank_t SQUARE_TO_RANK[64] = {
-    0,0,0,0,0,0,0,0,
-    1,1,1,1,1,1,1,1,
-    2,2,2,2,2,2,2,2,
-    3,3,3,3,3,3,3,3,
-    4,4,4,4,4,4,4,4,
-    5,5,5,5,5,5,5,5,
-    6,6,6,6,6,6,6,6,
-    7,7,7,7,7,7,7,7
-};
+    0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2,
+    2, 2, 3, 3, 3, 3, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4, 5, 5, 5, 5,
+    5, 5, 5, 5, 6, 6, 6, 6, 6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7};
 
 const bfile_t SQUARE_TO_FILE[64] = {
-    0,1,2,3,4,5,6,7,
-    0,1,2,3,4,5,6,7,
-    0,1,2,3,4,5,6,7,
-    0,1,2,3,4,5,6,7,
-    0,1,2,3,4,5,6,7,
-    0,1,2,3,4,5,6,7,
-    0,1,2,3,4,5,6,7,
-    0,1,2,3,4,5,6,7
-};
-
+    0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5,
+    6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3,
+    4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7, 0, 1, 2, 3, 4, 5, 6, 7};
 
 const bb_t KNIGHT_MOVES[64] = {
     0x0000000000020400ULL, 0x0000000000050800ULL, 0x00000000000A1100ULL,
@@ -238,13 +223,40 @@ bb_t BISHOP_PEXT_INDEX[64];
 bb_t PEXT_TABLE[107648];
 
 bb_t get_edge_filter(bindex_t sq) {
-    bb_t result =
-        (RANK_MASKS[RANK_1] | RANK_MASKS[RANK_8]) & ~RANK_MASKS[SQUARE_TO_RANK[sq]];
-    result |= (FILE_MASKS[FILE_A] | FILE_MASKS[FILE_H]) & ~FILE_MASKS[SQUARE_TO_FILE[sq]];
+    bb_t result = (RANK_MASKS[RANK_1] | RANK_MASKS[RANK_8]) &
+                  ~RANK_MASKS[SQUARE_TO_RANK[sq]];
+    result |= (FILE_MASKS[FILE_A] | FILE_MASKS[FILE_H]) &
+              ~FILE_MASKS[SQUARE_TO_FILE[sq]];
     return ~result;
 }
 
+// from chess programming wiki
+void init_between_table() {
+    for (bindex_t sq1 = 0; sq1 < 64; sq1++) {
+        for (bindex_t sq2 = 0; sq2 < 64; sq2++) {
 
+            const bb_t m1 = -1LL;
+            const bb_t a2a7 = 0x0001010101010100ULL;
+            const bb_t b2g7 = 0x0040201008040200ULL;
+            const bb_t h1b7 = 0x0002040810204080ULL;
+
+            bb_t btwn, line, rank, file;
+
+            btwn = (m1 << sq1) ^ (m1 << sq2);
+            file = (sq2 & 7) - (sq1 & 7);
+            rank = ((sq2 | 7) - sq1) >> 3;
+            line = ((file & 7) - 1) & a2a7;       /* a2a7 if same file */
+            line += 2 * (((rank & 7) - 1) >> 58); /* b1g1 if same rank */
+            line +=
+                (((rank - file) & 15) - 1) & b2g7; /* b2g7 if same diagonal */
+            line +=
+                (((rank + file) & 15) - 1) & h1b7; /* h1b7 if same antidiag */
+            line *= btwn & -btwn; /* mul acts like shift by smaller square */
+            BETWEEN_MASK[sq1][sq2] =
+                line & btwn; /* return the bits on that line in-between */
+        }
+    }
+}
 
 bb_t generate_sliding_mask(bindex_t sq, const int8_t directions[4][2],
                            bb_t blockers) {

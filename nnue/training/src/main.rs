@@ -11,10 +11,11 @@ use bullet::{
 };
 
 fn main() {
-    let hl_size = 512;
-    let initial_lr = 0.0005;
-    let final_lr = 0.0005 * 0.3f32.powi(5);
-    let superbatches = 80;
+    let hl_size = 1024;
+    let initial_lr = 0.0007;
+    let final_lr = 0.0007 * 0.3f32.powi(5);
+    let start_superbatch = 160;
+    let superbatches = 400;
     let wdl_proportion = 0.75;
     const NUM_OUTPUT_BUCKETS: usize = 8; // output bucket training time bad :(
 
@@ -48,12 +49,12 @@ fn main() {
         });
 
     let schedule = TrainingSchedule {
-        net_id: "output_buckets_512_8".to_string(),
+        net_id: "output_buckets_1024_8".to_string(),
         eval_scale: 400.0,
         steps: TrainingSteps {
             batch_size: 6104,
             batches_per_superbatch: 16384,
-            start_superbatch: 1,
+            start_superbatch: start_superbatch,
             end_superbatch: superbatches,
         },
         wdl_scheduler: wdl::ConstantWDL {
@@ -71,16 +72,16 @@ fn main() {
         threads: 2,
         test_set: None,
         output_directory: "checkpoints",
-        batch_queue_size: 32,
+        batch_queue_size: 128,
     };
 
     let dataloader = {
         let file_paths = [
-            "E:/data/test80-2024-06-jun-2tb7p.min-v2.v6.binpack",
             "E:/data/test80-2024-05-may-2tb7p.min-v2.v6.binpack",
+            "E:/data/test80-2024-06-jun-2tb7p.min-v2.v6.binpack",
         ];
-        let buffer_size_mb = 8192;
-        let threads = 6;
+        let buffer_size_mb = 1024;
+        let threads = 4;
         fn filter(entry: &TrainingDataEntry) -> bool {
             entry.ply >= 16
                 && !entry.pos.is_checked(entry.pos.side_to_move())
@@ -92,5 +93,6 @@ fn main() {
         SfBinpackLoader::new_concat_multiple(&file_paths, buffer_size_mb, threads, filter)
     };
 
+    trainer.load_from_checkpoint("checkpoints/output_buckets_1024_8-160");
     trainer.run(&schedule, &settings, &dataloader);
 }

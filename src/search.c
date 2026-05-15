@@ -262,6 +262,7 @@ void *search(void *arg) {
         }
 
         for (int i = 0; i < td[0].pv_length[0]; i++) {
+            if (td[0].pv_array[0][i] == 0) break;
             char move_buf[6];
             move_to_string(td[0].pv_array[0][i], move_buf);
             printf("%s ", move_buf);

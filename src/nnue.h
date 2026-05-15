@@ -7,7 +7,7 @@
 
 #define HIDDEN_SIZE 512
 #define SCALE 400
-#define BUCKET_COUNT 1
+#define BUCKET_COUNT 8
 #define BUCKET_DIV ((32 + BUCKET_COUNT - 1) / BUCKET_COUNT)
 #define QA 255
 #define QB 64

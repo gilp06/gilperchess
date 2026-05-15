@@ -11,12 +11,12 @@ use bullet::{
 };
 
 fn main() {
-    let hl_size = 1024;
+    let hl_size = 512;
     let initial_lr = 0.0005;
     let final_lr = 0.0005 * 0.3f32.powi(5);
-    let superbatches = 120;
+    let superbatches = 80;
     let wdl_proportion = 0.75;
-    const NUM_OUTPUT_BUCKETS: usize = 8;
+    const NUM_OUTPUT_BUCKETS: usize = 8; // output bucket training time bad :(
 
     let mut trainer = ValueTrainerBuilder::default()
         .dual_perspective()
@@ -48,11 +48,11 @@ fn main() {
         });
 
     let schedule = TrainingSchedule {
-        net_id: "2_output_buckets".to_string(),
+        net_id: "output_buckets_512_8".to_string(),
         eval_scale: 400.0,
         steps: TrainingSteps {
-            batch_size: 16_384 / 8,
-            batches_per_superbatch: 6104 * 8,
+            batch_size: 6104,
+            batches_per_superbatch: 16384,
             start_superbatch: 1,
             end_superbatch: superbatches,
         },
@@ -79,8 +79,8 @@ fn main() {
             "E:/data/test80-2024-06-jun-2tb7p.min-v2.v6.binpack",
             "E:/data/test80-2024-05-may-2tb7p.min-v2.v6.binpack",
         ];
-        let buffer_size_mb = 1024;
-        let threads = 4;
+        let buffer_size_mb = 8192;
+        let threads = 6;
         fn filter(entry: &TrainingDataEntry) -> bool {
             entry.ply >= 16
                 && !entry.pos.is_checked(entry.pos.side_to_move())

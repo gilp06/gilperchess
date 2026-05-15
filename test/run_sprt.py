@@ -1,5 +1,10 @@
 import subprocess
 import shlex
+import shutil
+
+
+
+shutil.copytree("../nnue", "./nnue", dirs_exist_ok=True)
 
 
 FASTCHESS = "fastchess"

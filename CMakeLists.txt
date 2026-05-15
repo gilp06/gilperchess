@@ -33,7 +33,7 @@ add_custom_command(TARGET gilperchess POST_BUILD
         ${OLD_DIR}/gilperchess-${BUILD_TIME}$<TARGET_FILE_SUFFIX:gilperchess>
 )
 
-file(GLOB NNUE_FILES "${CMAKE_SOURCE_DIR}/nnue/*")
+file(GLOB NNUE_FILES "${CMAKE_SOURCE_DIR}/nnue/*.bin")
 
 add_custom_command(
     TARGET gilperchess POST_BUILD

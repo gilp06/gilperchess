@@ -15,7 +15,7 @@ ENGINE_BASE = "../../gilperchess-master/build/gilperchess.exe"
 
 BOOK = "./books/8moves_v3.pgn"
 
-TC = "1+0.1"
+TC = "10+0.1"
 
 # THREADS = 1
 # HASH = 128
@@ -36,6 +36,8 @@ cmd = f"""
 -openings file={BOOK} format=pgn order=random
 -sprt elo0={ELO0} elo1={ELO1} alpha={ALPHA} beta={BETA}
 -rounds {ROUNDS}
+-ratinginterval 10
+-maxmoves 100
 -repeat
 -concurrency {CONCURRENCY}
 -pgnout file="games.pgn"

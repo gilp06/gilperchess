@@ -70,6 +70,6 @@ typedef struct s_sthreaddata {
 void *go_search(void *arg);
 void *search(void *arg);
 void search_bestmove(globalstate_t *gs, board_t const *starting_board);
-int16_t alphabeta(sthreaddata_t *td, bool root, int16_t depth, int16_t alpha,
+int16_t alphabeta(sthreaddata_t *td, bool root, bool from_null, int16_t depth, int16_t alpha,
                   int16_t beta, int16_t ply);
 int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply);

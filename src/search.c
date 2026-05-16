@@ -216,23 +216,23 @@ void *search(void *arg) {
             beta = td->score + delta;
         }
 
-        int16_t score = alphabeta(td, true, cur_depth, alpha, beta, 0);
+        int16_t score = alphabeta(td, true, false, cur_depth, alpha, beta, 0);
         if (score <= alpha) {
             alpha = -INT16_MAX;
-            score = alphabeta(td, true, cur_depth, alpha, beta, 0);
+            score = alphabeta(td, true, false, cur_depth, alpha, beta, 0);
 
             if (score >= beta) {
                 beta = INT16_MAX;
-                score = alphabeta(td, true, cur_depth, alpha, beta, 0);
+                score = alphabeta(td, true, false, cur_depth, alpha, beta, 0);
             }
 
         } else if (score >= beta) {
             beta = INT16_MAX;
-            score = alphabeta(td, true, cur_depth, alpha, beta, 0);
+            score = alphabeta(td, true, false, cur_depth, alpha, beta, 0);
 
             if (score <= alpha) {
                 alpha = -INT16_MAX;
-                score = alphabeta(td, true, cur_depth, alpha, beta, 0);
+                score = alphabeta(td, true, false, cur_depth, alpha, beta, 0);
             }
         }
 
@@ -250,7 +250,8 @@ void *search(void *arg) {
 
         // output info (should probably include the sum of all node counts)
         double cur_time = get_real_time() - td->gs->start_time;
-        printf("info nodes %llu depth %d time %llu ", td[0].nodes,
+        printf("info nps %llu nodes %llu depth %d time %llu ",
+               (uint64_t)(td[0].nodes * 1000.0 / cur_time), td[0].nodes,
                td[0].depth_finished, (uint64_t)cur_time);
 
         int mate = convert_mate(td->score);
@@ -262,7 +263,8 @@ void *search(void *arg) {
         }
 
         for (int i = 0; i < td[0].pv_length[0]; i++) {
-            if (td[0].pv_array[0][i] == 0) break;
+            if (td[0].pv_array[0][i] == 0)
+                break;
             char move_buf[6];
             move_to_string(td[0].pv_array[0][i], move_buf);
             printf("%s ", move_buf);
@@ -279,8 +281,8 @@ void *search(void *arg) {
     return NULL;
 }
 
-int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
-                  int16_t alpha, int16_t beta, int16_t ply) {
+int16_t alphabeta(sthreaddata_t *td, bool root_node, bool from_null,
+                  int16_t depth, int16_t alpha, int16_t beta, int16_t ply) {
 
     depth = depth > 0 ? depth : 0;
     globalstate_t *gs = td->gs;
@@ -309,46 +311,23 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
         return 0;
     }
 
-    // check transposition table
+    tt_entry_t entry = get_tt_entry(&gs->transposition_table, board->st.key);
+    if (entry.flag != INVALID && entry.hash == board->st.key) {
+
+        int16_t tt_score = score_from_tt(entry.value, ply);
+        if (!root_node && entry.depth >= depth && (depth == 0 || !pv_node)) {
+            if (entry.flag == EXACT ||
+                (entry.flag == LOWERBOUND && tt_score >= beta) ||
+                (entry.flag == UPPERBOUND && tt_score <= alpha))
+                return tt_score;
+        }
+
+        tt_move = entry.bestmove;
+    }
 
     if (!root_node) {
-
-        tt_entry_t entry =
-            get_tt_entry(&gs->transposition_table, board->st.key);
-        if (entry.flag != INVALID && entry.hash == board->st.key) {
-
-            int16_t tt_score = score_from_tt(entry.value, ply);
-            if (entry.depth >= depth && (depth == 0 || !pv_node)) {
-                if (entry.flag == EXACT ||
-                    (entry.flag == LOWERBOUND && tt_score >= beta) ||
-                    (entry.flag == UPPERBOUND && tt_score <= alpha))
-                    return tt_score;
-            }
-
-            tt_move = entry.bestmove;
-        }
-
-        if (depth <= 3 && !incheck && eval + (150 + 100 * depth) < alpha) {
-            int16_t qscore = qsearch(td, alpha, beta, ply + 1);
-            if (qscore < alpha)
-                return qscore;
-        }
-
         if (depth == 0)
-            // return eval;
-            return qsearch(td, alpha, beta, ply + 1);
-
-        if (depth >= 3 && !incheck && !pv_node) {
-            int16_t R = 3 + depth / 6;
-            dstate_t undo;
-            perform_null_move(board, &undo);
-            int16_t score = -alphabeta(td, false, depth - 1 - R, -beta,
-                                       -(beta - 1), ply + 1);
-            undo_null_move(board, &undo);
-            if (score >= beta) {
-                return score;
-            }
-        }
+            return qsearch(td, alpha, beta, ply);
     }
 
     moveselect_t move_select;
@@ -363,7 +342,6 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
         move_t cur_move = select_move(board, &move_select);
         if (cur_move == 0)
             break;
-
         bool iscapture = is_capture(board, cur_move);
 
         dstate_t undo;
@@ -374,45 +352,28 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, int16_t depth,
         }
         played++;
 
+        bool caused_check = in_check(board, board->side_to_move);
 
-        bool caused_check =
-            in_check(board, board->side_to_move); // check if enemy is in check
-        // undo_move(board, &undo);
-        int16_t cur_depth = depth;
-        if (caused_check) {
-            cur_depth++;
-        }
-        // perform_move(board, cur_move, &undo);
-        
-        
+        int16_t reductions = 0;
+
         if (played == 1) {
-            value = -alphabeta(td, false, cur_depth - 1, -beta, -alpha, ply + 1);
-        }
-        // late move pruning, don't reduce on killers
-        else if (depth >= 3 && played >= 4 && !pv_node && !incheck &&
-                 !iscapture && (move_type(cur_move) != PROMOTION) &&
-                 cur_move != td->killers[ply][0] &&
-                 cur_move != td->killers[ply][1]) {
             value =
-                -alphabeta(td, false, cur_depth - 2, -alpha - 1, -alpha, ply + 1);
-            if (value > alpha) {
-                value =
-                    -alphabeta(td, false, cur_depth - 1, -beta, -alpha, ply + 1);
+                -alphabeta(td, false, false, depth - 1, -beta, -alpha, ply + 1);
+        } else if (reductions != 0) {
+            value = -alphabeta(td, false, false, depth - 1 - reductions,
+                               -alpha - 1, -alpha, ply + 1);
+            if (value > alpha && reductions > 0) {
+                // research with original depth if we aren't extending
+                value = -alphabeta(td, false, false, depth - 1, -alpha - 1,
+                                   -alpha, ply + 1);
             }
+        } else {
+            value = -alphabeta(td, false, false, depth - 1, -alpha - 1, -alpha,
+                               ply + 1);
         }
-        // PVS search
-        else {
+        if (pv_node && value > alpha) {
             value =
-                -alphabeta(td, false, cur_depth - 1, -alpha - 1, -alpha, ply + 1);
-            if (pv_node && value > alpha) {
-                value =
-                    -alphabeta(td, false, cur_depth - 1, -beta, -alpha, ply + 1);
-            }
-        }
-
-        // verify that signature matches
-        if (generate_key_from_scratch(board) != board->st.key) {
-            printf("invalid key!\n");
+                -alphabeta(td, false, false, depth - 1, -beta, -alpha, ply + 1);
         }
 
         undo_move(board, &undo);

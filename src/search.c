@@ -326,8 +326,16 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, bool from_null,
     }
 
     if (!root_node) {
+
         if (depth == 0)
             return qsearch(td, alpha, beta, ply);
+
+        // Reverse Futility Pruning (129.31 +/- 18.22 ELO [0, 2.5] SPRT)
+        if (!pv_node && !incheck && depth < 4 && eval >= beta + 100 * depth) {
+            return eval;
+        } 
+
+        
     }
 
     moveselect_t move_select;

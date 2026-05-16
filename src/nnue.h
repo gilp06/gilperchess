@@ -3,6 +3,8 @@
 #include <stdalign.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
+#include <incbin.h>
 
 // C implementation of the NNUE from the bullet-lib simple.rs examples
 
@@ -12,6 +14,8 @@
 #define BUCKET_DIV ((32 + BUCKET_COUNT - 1) / BUCKET_COUNT)
 #define QA 255
 #define QB 64
+
+INCBIN_EXTERN(nnue_bin);
 
 static inline int32_t clamp_mag(int32_t min, int32_t max, int32_t value) {
     if (value < min)
@@ -30,7 +34,7 @@ typedef struct s_accumulator {
     int16_t values[HIDDEN_SIZE];
 } accumulator_t;
 
-typedef struct s_nnue {
+typedef struct __attribute__((aligned(64))) s_nnue {
     accumulator_t feature_weights[768];
     accumulator_t feature_biases;
 
@@ -42,14 +46,14 @@ static inline accumulator_t accum_init(nnue_t *nnue) {
     return nnue->feature_biases;
 }
 
-static inline void accum_add_feat(nnue_t *nnue, size_t index,
+static inline void accum_add_feat(const nnue_t *nnue, size_t index,
                                   accumulator_t *accum) {
     for (int i = 0; i < HIDDEN_SIZE; i++) {
         accum->values[i] += nnue->feature_weights[index].values[i];
     }
 }
 
-static inline void accum_remove_feat(nnue_t *nnue, size_t index,
+static inline void accum_remove_feat(const nnue_t *nnue, size_t index,
                                      accumulator_t *accum) {
     for (int i = 0; i < HIDDEN_SIZE; i++) {
         accum->values[i] -= nnue->feature_weights[index].values[i];
@@ -64,7 +68,7 @@ static inline size_t get_bucket(size_t piece_count) {
         return bucket;
 }
 
-static inline int32_t evaluate_nnue(nnue_t *nnue, accumulator_t *us,
+static inline int32_t evaluate_nnue(const nnue_t *nnue, accumulator_t *us,
                                     accumulator_t *them, size_t piece_count) {
     size_t bucket = get_bucket(piece_count);
     int32_t output = 0;
@@ -123,15 +127,8 @@ static inline int32_t evaluate_nnue(nnue_t *nnue, accumulator_t *us,
     return output;
 }
 
-extern alignas(64) nnue_t NNUE;
+extern const nnue_t* NNUE;
 
-static inline int load_nnue(const char *path) {
-    FILE *f = fopen(path, "rb");
-    if (!f)
-        return 0;
-
-    size_t n = fread(&NNUE, 1, sizeof(NNUE), f);
-    fclose(f);
-
-    return n == sizeof(NNUE);
+static inline int load_nnue() {
+    return 0;
 }

@@ -188,8 +188,8 @@ void init_board_from_fen(board_t *board, const char *str) {
 
     // INIT NNUE
 
-    board->white_accum = NNUE.feature_biases;
-    board->black_accum = NNUE.feature_biases;
+    board->white_accum = NNUE->feature_biases;
+    board->black_accum = NNUE->feature_biases;
 
     for (bindex_t sq = 0; sq < 64; sq++) {
         piece_t piece = board->pieces_at[sq];

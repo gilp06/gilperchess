@@ -5,6 +5,21 @@ project(gilperchess C)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+
+
+add_library(incbin INTERFACE)
+target_include_directories(incbin INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/deps/incbin
+)
+
+
+
+
+
+
+
+
 add_executable(gilperchess)
 target_sources(gilperchess 
     PRIVATE
@@ -21,6 +36,7 @@ target_sources(gilperchess
         src/nnue.c
 )
 target_compile_options(gilperchess PRIVATE -Wall -march=native -O3 -flto -funroll-loops)
+target_link_libraries(gilperchess PRIVATE incbin)
  
 string(TIMESTAMP BUILD_TIME "%Y%m%d-%H%M%S")
 

@@ -11,7 +11,7 @@
 int main() {
     setvbuf(stdout, NULL, _IONBF, 0);
 
-    if (!load_nnue("nnue/1024-8b-400.bin")) {
+    if (load_nnue() != 0) {
         printf("failed to load NNUE!\n");
         exit(1);
     }

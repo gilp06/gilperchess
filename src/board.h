@@ -94,9 +94,9 @@ static inline void nnue_add_piece(board_t *board, bindex_t sq, piece_t piece) {
     piecetype_t pt = piece_type(piece);
     side_t ps = piece_side(piece);
     int windex = calculate_chess768_index(SIDE_WHITE, sq, pt, ps);
-    accum_add_feat(&NNUE, windex, &board->white_accum);
+    accum_add_feat(NNUE, windex, &board->white_accum);
     int bindex = calculate_chess768_index(SIDE_BLACK, sq, pt, ps);
-    accum_add_feat(&NNUE, bindex, &board->black_accum);
+    accum_add_feat(NNUE, bindex, &board->black_accum);
 }
 
 static inline void nnue_remove_piece(board_t *board, bindex_t sq,
@@ -106,9 +106,9 @@ static inline void nnue_remove_piece(board_t *board, bindex_t sq,
     piecetype_t pt = piece_type(piece);
     side_t ps = piece_side(piece);
     int windex = calculate_chess768_index(SIDE_WHITE, sq, pt, ps);
-    accum_remove_feat(&NNUE, windex, &board->white_accum);
+    accum_remove_feat(NNUE, windex, &board->white_accum);
     int bindex = calculate_chess768_index(SIDE_BLACK, sq, pt, ps);
-    accum_remove_feat(&NNUE, bindex, &board->black_accum);
+    accum_remove_feat(NNUE, bindex, &board->black_accum);
 }
 
 // update side's pinners and !side's blockers

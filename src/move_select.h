@@ -35,6 +35,6 @@ typedef struct s_moveselect {
 
 void update_history(sthreaddata_t* td, side_t stm, bindex_t from, bindex_t to, int16_t bonus);
 void init_select(sthreaddata_t* td, moveselect_t *move_select, move_t tt_move, move_t killers[2], selecttype_t type);
-move_t select_move(board_t *board, moveselect_t *move_select);
+move_t select_move(board_t *board, moveselect_t *move_select, bool* see_result);
 
 bool see(board_t *board, move_t move, int16_t threshold);

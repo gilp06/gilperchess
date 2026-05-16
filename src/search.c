@@ -1,6 +1,7 @@
 #include <setjmp.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <math.h>
 
 #include "board.h"
 #include "eval.h"
@@ -330,10 +331,27 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, bool from_null,
 
         if (depth == 0)
             return qsearch(td, alpha, beta, ply);
-
+        bool can_prune = !pv_node && !incheck;
         // Reverse Futility Pruning (129.31 +/- 18.22 ELO [0, 2.5] SPRT)
-        if (!pv_node && !incheck && depth < 4 && eval >= beta + 100 * depth) {
+        if (can_prune && depth < 4 && eval >= beta + 100 * depth) {
             return beta + (eval - beta) / 4;
+        }
+
+        // Null move pruning (131.98 +/- 34.02 ELO [0, 10.0] SPRT)
+        if (can_prune && depth > 2 && eval + 100 * depth >= beta &&
+            has_pieces(board, board->side_to_move) && !from_null) {
+
+            int reduction = 4 + depth / 3;
+
+            dstate_t undo;
+            perform_null_move(board, &undo);
+            int16_t score = -alphabeta(td, false, true, depth - 1 - reduction,
+                                       -beta, -beta + 1, ply + 1);
+            undo_null_move(board, &undo);
+            if (score >= beta) {
+                // later possibly verify the score
+                return score;
+            }
         }
     }
 
@@ -348,7 +366,8 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, bool from_null,
     int16_t value;
 
     while (true) {
-        move_t cur_move = select_move(board, &move_select);
+        bool see_result = false;
+        move_t cur_move = select_move(board, &move_select, &see_result);
         if (cur_move == 0)
             break;
         bool iscapture = is_capture(board, cur_move);
@@ -369,6 +388,19 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, bool from_null,
         }
 
         int16_t reductions = 0;
+
+        // Late Move Pruning
+        // if (depth > 3 && !incheck && !is_checking && !pv_node &&
+        //     cur_move != td->killers[ply][0] &&
+        //     cur_move != td->killers[ply][1] &&
+        //     (is_quiet || !see_result)) {
+
+        //     if(is_quiet) {
+        //         reductions += (int16_t) (0.8 + log(played) * log(depth) / 2.5);   
+        //     } else {
+        //         reductions += is_checking ? 2 : 3;
+        //     }
+        // }
 
         if (played == 1) {
             value =
@@ -515,7 +547,8 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
     init_select(td, &move_select, tt_move, none_killers, type);
 
     while (true) {
-        move_t cur_move = select_move(board, &move_select);
+        bool see_result = false;
+        move_t cur_move = select_move(board, &move_select, &see_result);
         if (cur_move == 0)
             break;
         if (!see(board, cur_move, 0))

@@ -168,4 +168,7 @@ static inline void update_pinners_and_blockers(board_t* board, side_t side) {
 }
 
 
-
+// check if board has 
+static inline bool has_pieces(board_t* board, side_t stm) {
+    return (board->pieces_occ[PIECETYPE_ROOK] | board->pieces_occ[PIECETYPE_BISHOP] | board->pieces_occ[PIECETYPE_KNIGHT] | board->pieces_occ[PIECETYPE_QUEEN]) & board->sides_occ[stm];
+}

@@ -180,8 +180,8 @@ static move_t pop_move(size_t *length, move_t *moves, int16_t *scores,
 //     return *length;
 // }
 
-move_t select_move(board_t *board, moveselect_t *ms) {
-
+move_t select_move(board_t *board, moveselect_t *ms, bool* see_result) {
+    *see_result = false;
     move_t *moves = ms->moves;
     int16_t *scores = ms->move_scores;
 
@@ -208,8 +208,11 @@ move_t select_move(board_t *board, moveselect_t *ms) {
                     break; // looking at bad loud moves
 
                 if (!see(board, ms->moves[best], 0)) {
+                    *see_result = false;
                     ms->move_scores[best] = -1;
                     continue;
+                } else {
+                    *see_result = true;
                 }
 
                 best_move = pop_move(&ms->loud_count, moves, scores, best);
@@ -221,7 +224,7 @@ move_t select_move(board_t *board, moveselect_t *ms) {
 
             if (ms->select_type == NON_QUIET) {
                 ms->phase = BAD_LOUD_MOVES;
-                return select_move(board, ms);
+                return select_move(board, ms, see_result);
             }
 
             ms->phase = GEN_QUIET;

@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
+#include <string.h>
 
 #include "board.h"
 #include "eval.h"
@@ -14,8 +14,8 @@
 #include "perft.h"
 #include "search.h"
 #include "types.h"
-#include "utils.h"
 #include "uci.h"
+#include "utils.h"
 
 pthread_t main_search_thread;
 gosearchdata_t search_data;
@@ -69,8 +69,6 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
             command = COMMAND_STOP;
         } else if (strcmp(tok, "eval") == 0) {
             command = COMMAND_EVAL;
-        } else if (strcmp(tok, "moves") == 0) {
-            command = COMMAND_MOVES;
         }
 
         switch (command) {
@@ -107,21 +105,6 @@ bool uci_loop(globalstate_t *gs, board_t *board) {
         }
         case COMMAND_UCINEWGAME: {
             clear_ttable(&gs->transposition_table);
-            return false;
-        }
-        case COMMAND_MOVES: {
-            moveselect_t ms;
-            move_t killers[2] = {0, 0};
-            init_select(board, &ms, 0, killers, BOTH_TYPES);
-            while (true) {
-                move_t next_move = select_move(board, &ms);
-                if (next_move == 0) break;
-                else {
-                    char move_str[6];
-                    move_to_string(next_move, move_str);
-                    printf("%s\n", move_str);
-                }
-            }
             return false;
         }
         case COMMAND_GO: {

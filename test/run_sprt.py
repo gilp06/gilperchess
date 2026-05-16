@@ -13,13 +13,13 @@ ENGINE_BASE = "../../gilperchess-master/build/gilperchess.exe"
 
 BOOK = "./books/8moves_v3.pgn"
 
-TC = "10+0.1"
+TC = "8+0.08"
 
 # THREADS = 1
 # HASH = 128
 
 ELO0 = 0
-ELO1 = 2.5
+ELO1 = 10
 ALPHA = 0.05
 BETA = 0.1
 

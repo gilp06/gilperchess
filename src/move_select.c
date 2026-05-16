@@ -1,8 +1,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "search.h"
 #include "move_select.h"
 #include "move_gen.h"
+#include "utils.h"
 
 static const uint8_t MVV_LVA[7][7] = {
     {15, 14, 13, 12, 11, 10, 0}, {25, 24, 23, 22, 21, 20, 0},
@@ -10,6 +12,15 @@ static const uint8_t MVV_LVA[7][7] = {
     {55, 54, 53, 52, 51, 50, 0}, {0, 0, 0, 0, 0, 0, 0},
     {0, 0, 0, 0, 0, 0, 0},
 };
+
+#define MAX_HISTORY 25000
+
+
+void update_history(sthreaddata_t* td, side_t stm, bindex_t from, bindex_t to, int16_t bonus) {
+    int16_t clamped_bonus = CLAMP(bonus, -MAX_HISTORY, MAX_HISTORY);
+    int16_t cur_val = td->quiet_history[stm][from][to];
+    td->quiet_history[stm][from][to] += clamped_bonus - cur_val * abs(clamped_bonus) / MAX_HISTORY;
+}
 
 bool see(board_t *board, move_t move, int16_t threshold) {
     // static exchange from stockfish
@@ -109,9 +120,9 @@ static int16_t score_move(board_t *board, moveselect_t* ms, move_t move) {
     piece_t from = board->pieces_at[move_from(move)];
     piece_t to = board->pieces_at[move_to(move)];
     if (to == PIECE_NONE) {
-        if(move == ms->killer[0]) return 9000;        
-        if(move == ms->killer[1]) return 8000;
-        return 0;
+        if(move == ms->killer[0]) return 30000;        
+        if(move == ms->killer[1]) return 29000;
+        return ms->td->quiet_history[board->side_to_move][move_from(move)][move_to(move)];
     }
 
     int16_t offset = MVV_LVA[piece_type(to)][piece_type(from)];
@@ -126,8 +137,8 @@ void score_moves(board_t *board, moveselect_t *move_select, size_t start, size_t
     }
 }
 
-void init_select(board_t *board, moveselect_t *move_select, move_t tt_move,
-                 move_t killers[2], selecttype_t type) {
+void init_select(sthreaddata_t* td, moveselect_t *move_select, move_t tt_move, move_t killers[2], selecttype_t type) {
+    move_select->td = td;
     move_select->phase = (tt_move != 0) ? TT_MOVE : (type != ALL_QUIET) ? GEN_LOUD : GEN_QUIET;
     move_select->tt_move = tt_move;
     move_select->select_type = type;

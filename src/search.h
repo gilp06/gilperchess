@@ -4,9 +4,12 @@
 #include <stdatomic.h>
 
 #include "hashtable.h"
-#include "move_select.h"
 #include "board.h"
 #include "types.h"
+
+
+
+typedef struct s_moveselect moveselect_t;
 
 
 #define MAX_DEPTH 64
@@ -45,6 +48,7 @@ typedef struct s_gosearchdata {
     board_t *starting_board;
 } gosearchdata_t;
 
+
 typedef struct s_sthreaddata {
     globalstate_t *gs;
     board_t board;
@@ -56,6 +60,7 @@ typedef struct s_sthreaddata {
     uint8_t tdpv_len;
 
     move_t killers[MAX_DEPTH][2];
+    int16_t quiet_history[2][64][64];
     
     int16_t depth_finished;
 
@@ -66,6 +71,7 @@ typedef struct s_sthreaddata {
     jmp_buf jmp;
     bool worker;
 } sthreaddata_t;
+
 
 void *go_search(void *arg);
 void *search(void *arg);

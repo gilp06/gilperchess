@@ -5,7 +5,7 @@
 #include "board.h"
 #include "eval.h"
 #include "hashtable.h"
-#include "move_gen.h"
+#include "move_select.h"
 #include "pthread.h"
 #include "search.h"
 #include "types.h"
@@ -161,6 +161,7 @@ void search_bestmove(globalstate_t *gs, board_t const *starting_board) {
         memset(td[i].pv_length, 0, sizeof(td[i].pv_length));
         memset(td[i].pv_array, 0, sizeof(td[i].pv_array));
         memset(td->killers, 0, sizeof(td->killers));
+        memset(td->quiet_history, 0, sizeof(td->quiet_history));
     }
 
     // identify main thread
@@ -333,13 +334,13 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, bool from_null,
         // Reverse Futility Pruning (129.31 +/- 18.22 ELO [0, 2.5] SPRT)
         if (!pv_node && !incheck && depth < 4 && eval >= beta + 100 * depth) {
             return eval;
-        } 
-
-        
+        }
     }
 
     moveselect_t move_select;
-    init_select(board, &move_select, tt_move, td->killers[ply], BOTH_TYPES);
+    move_t quiets_searched[256];
+    size_t quiet_count = 0;
+    init_select(td, &move_select, tt_move, td->killers[ply], BOTH_TYPES);
 
     int16_t best_value = INT16_MIN;
     int16_t played = 0;
@@ -360,7 +361,12 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, bool from_null,
         }
         played++;
 
-        bool caused_check = in_check(board, board->side_to_move);
+        bool is_checking = in_check(board, board->side_to_move);
+        bool is_quiet = !iscapture && move_type(cur_move) != PROMOTION;
+
+        if (is_quiet) {
+            quiets_searched[quiet_count++] = cur_move;
+        }
 
         int16_t reductions = 0;
 
@@ -394,8 +400,26 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, bool from_null,
                 store_pv(ply, best_move, td);
                 alpha = value;
                 if (alpha >= beta) {
-                    if (!iscapture && move_type(cur_move) != PROMOTION) {
+                    if (is_quiet) {
+                        // update killer moves
                         store_killer(td, best_move, ply);
+
+                        // quiet history heuristic with gravity
+                        // punish quiet moves that didnt cause a cutoff
+                        // (59.85 +/- 23.75 ELO [0, 10] SPRT)
+                        int16_t bonus = 300 * depth - 250;
+                        update_history(td, board->side_to_move,
+                                       move_from(best_move), move_to(best_move),
+                                       bonus);
+
+                        for (int i = 0; i < quiet_count; i++) {
+                            move_t move = quiets_searched[i];
+                            if (move == best_move)
+                                continue;
+                            update_history(td, board->side_to_move,
+                                           move_from(move), move_to(move),
+                                           -bonus);
+                        }
                     }
                     break;
                 }
@@ -488,7 +512,7 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
 
     int32_t played = 0;
     move_t none_killers[2] = {0, 0};
-    init_select(&td->board, &move_select, tt_move, none_killers, type);
+    init_select(td, &move_select, tt_move, none_killers, type);
 
     while (true) {
         move_t cur_move = select_move(board, &move_select);

@@ -367,25 +367,14 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, bool from_null,
             }
         }
 
-        // internal iterative deepening
-        // from what i understand if we are in a pv node and we don't have a tt-hit
-        // the move ordering is forced to sort whcih is going to be expensive.
-        // so instead we reduce the depth we search at by a margin and use the
-        // new populated ttable and history to assist in search
-        if (pv_node && depth > 3 && !tt_hit) {
-            alphabeta(td, false, false, depth - 2, alpha, beta, ply);
-            // check for a hit now
-            tt_entry_t entry =
-                get_tt_entry(&gs->transposition_table, board->st.key);
-            if (entry.flag != INVALID && entry.hash == board->st.key) {
-                tt_hit = true;
-
-                // don't trust the tt_score and only take the move for ordering
-                tt_move = entry.bestmove;
-            }
-        }
     }
 
+    // // internal iterative reduction
+    // if (!root_node && pv_node && depth > 3 && !tt_hit) {
+    //     depth -= 1;
+    // }
+
+    
     moveselect_t move_select;
     move_t quiets_searched[256];
     size_t quiet_count = 0;

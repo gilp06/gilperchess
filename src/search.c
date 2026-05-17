@@ -591,7 +591,7 @@ int16_t qsearch(sthreaddata_t *td, int16_t alpha, int16_t beta, int16_t ply) {
         move_t cur_move = select_move(board, &move_select, &see_result);
         if (cur_move == 0)
             break;
-        if (!see(board, cur_move, 0))
+        if (!see_result && !incheck)
             continue;
         dstate_t undo;
         if (!perform_move(board, cur_move, &undo)) {

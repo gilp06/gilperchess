@@ -142,7 +142,6 @@ void *go_search(void *arg) {
         lmp_movecount[d] = 3 + 3 * d * d;
     }
 
-    
     gosearchdata_t *search_data = (gosearchdata_t *)arg;
     board_t const *starting_board = search_data->starting_board;
     searchparams_t params = search_data->search_settings;
@@ -209,9 +208,6 @@ void search_bestmove(globalstate_t *gs, board_t const *starting_board) {
 
 void *search(void *arg) {
 
-
-    
-    
     sthreaddata_t *td = (sthreaddata_t *)arg;
 
     int16_t alpha = -INT16_MAX;
@@ -328,9 +324,10 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, bool from_null,
         return 0;
     }
 
+    bool tt_hit = false;
     tt_entry_t entry = get_tt_entry(&gs->transposition_table, board->st.key);
     if (entry.flag != INVALID && entry.hash == board->st.key) {
-
+        tt_hit = true;
         int16_t tt_score = score_from_tt(entry.value, ply);
         if (!root_node && entry.depth >= depth && (depth == 0 || !pv_node)) {
             if (entry.flag == EXACT ||
@@ -367,6 +364,24 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, bool from_null,
             if (score >= beta) {
                 // later possibly verify the score
                 return score;
+            }
+        }
+
+        // internal iterative deepening
+        // from what i understand if we are in a pv node and we don't have a tt-hit
+        // the move ordering is forced to sort whcih is going to be expensive.
+        // so instead we reduce the depth we search at by a margin and use the
+        // new populated ttable and history to assist in search
+        if (pv_node && depth > 3 && !tt_hit) {
+            alphabeta(td, false, false, depth - 2, alpha, beta, ply);
+            // check for a hit now
+            tt_entry_t entry =
+                get_tt_entry(&gs->transposition_table, board->st.key);
+            if (entry.flag != INVALID && entry.hash == board->st.key) {
+                tt_hit = true;
+
+                // don't trust the tt_score and only take the move for ordering
+                tt_move = entry.bestmove;
             }
         }
     }

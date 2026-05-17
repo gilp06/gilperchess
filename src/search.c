@@ -1,7 +1,7 @@
+#include <math.h>
 #include <setjmp.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <math.h>
 
 #include "board.h"
 #include "eval.h"
@@ -30,6 +30,9 @@ const searchparams_t infinite_search = {.movetime = 0,
 
 sthreaddata_t td[THREAD_COUNT];
 pthread_t pts[THREAD_COUNT - 1]; // reuse main search thread
+
+// indexed by depth
+int16_t lmp_movecount[12];
 
 static void store_pv(int ply, move_t move, sthreaddata_t *td) {
     // store pv into the table and propogate it upward
@@ -132,6 +135,14 @@ static searchlimits_t gen_limits(searchparams_t *params, side_t side_to_move) {
 }
 
 void *go_search(void *arg) {
+
+    // init lmp lookup table
+    // TODO: add options for all of these in one struct
+    for (int d = 0; d < 12; d++) {
+        lmp_movecount[d] = 3 + 3 * d * d;
+    }
+
+    
     gosearchdata_t *search_data = (gosearchdata_t *)arg;
     board_t const *starting_board = search_data->starting_board;
     searchparams_t params = search_data->search_settings;
@@ -197,6 +208,10 @@ void search_bestmove(globalstate_t *gs, board_t const *starting_board) {
 }
 
 void *search(void *arg) {
+
+
+    
+    
     sthreaddata_t *td = (sthreaddata_t *)arg;
 
     int16_t alpha = -INT16_MAX;
@@ -331,11 +346,14 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, bool from_null,
 
         if (depth == 0)
             return qsearch(td, alpha, beta, ply);
+
+        // Reverse Futility Pruning
         bool can_prune = !pv_node && !incheck;
         if (can_prune && depth < 4 && eval >= beta + 100 * depth) {
             return beta + (eval - beta) / 4;
         }
 
+        // Null Move Pruning
         if (can_prune && depth > 2 && eval + 100 * depth >= beta &&
             has_pieces(board, board->side_to_move) && !from_null) {
 
@@ -363,12 +381,34 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, bool from_null,
     move_t best_move = 0;
     int16_t value;
 
+    bool prune_quiets = false;
+
     while (true) {
         bool see_result = false;
         move_t cur_move = select_move(board, &move_select, &see_result);
         if (cur_move == 0)
             break;
         bool iscapture = is_capture(board, cur_move);
+
+        bool is_quiet = !iscapture && move_type(cur_move) != PROMOTION;
+
+        // Late Move Pruning
+        // happens before we perform the move
+
+        int16_t lmp_depth = 8;
+        int16_t lmp_threshold = lmp_movecount[CLAMP(depth, 0, 11)];
+        if (!root_node && !pv_node && !incheck &&
+            best_value > -CHECKMATE + 1000 && depth <= lmp_depth &&
+            played >= lmp_threshold) {
+            prune_quiets = true;
+        }
+
+        if (is_quiet) {
+            if (prune_quiets) {
+                continue;
+            }
+            quiets_searched[quiet_count++] = cur_move;
+        }
 
         dstate_t undo;
         if (!perform_move(board, cur_move, &undo)) {
@@ -379,28 +419,23 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, bool from_null,
         played++;
 
         bool is_checking = in_check(board, board->side_to_move);
-        bool is_quiet = !iscapture && move_type(cur_move) != PROMOTION;
-
-        if (is_quiet) {
-            quiets_searched[quiet_count++] = cur_move;
-        }
 
         int16_t reductions = 0;
 
         // Late Move Reductions
-        // don't reduce the tt_move if available and the first move in order 
+        // don't reduce the tt_move if available and the first move in order
         // we do not reduce on the following:
         // depth <= 3, checking moves, moves coming out of check,
-        // on PV nodes, killer moves,  
+        // on PV nodes, killer moves,
         if (played > 1) {
             int16_t lmr_threshold = 2;
-            if (played > lmr_threshold && depth >= 2 && !incheck && !is_checking && !pv_node &&
-                cur_move != td->killers[ply][0] &&
-                cur_move != td->killers[ply][1] &&
-                (is_quiet || !see_result)) {
+            if (played > lmr_threshold && depth >= 2 && !incheck &&
+                !is_checking && !pv_node && cur_move != td->killers[ply][0] &&
+                cur_move != td->killers[ply][1] && (is_quiet || !see_result)) {
 
-                if(is_quiet) {
-                    reductions += (int16_t) (0.8 + log(played) * log(depth) / 2.5);   
+                if (is_quiet) {
+                    reductions +=
+                        (int16_t)(0.8 + log(played) * log(depth) / 2.5);
                 } else {
                     reductions += is_checking ? 2 : 3;
                 }

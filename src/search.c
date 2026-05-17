@@ -332,12 +332,10 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, bool from_null,
         if (depth == 0)
             return qsearch(td, alpha, beta, ply);
         bool can_prune = !pv_node && !incheck;
-        // Reverse Futility Pruning (129.31 +/- 18.22 ELO [0, 2.5] SPRT)
         if (can_prune && depth < 4 && eval >= beta + 100 * depth) {
             return beta + (eval - beta) / 4;
         }
 
-        // Null move pruning (131.98 +/- 34.02 ELO [0, 10.0] SPRT)
         if (can_prune && depth > 2 && eval + 100 * depth >= beta &&
             has_pieces(board, board->side_to_move) && !from_null) {
 
@@ -389,18 +387,24 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, bool from_null,
 
         int16_t reductions = 0;
 
-        // Late Move Pruning
-        // if (depth > 3 && !incheck && !is_checking && !pv_node &&
-        //     cur_move != td->killers[ply][0] &&
-        //     cur_move != td->killers[ply][1] &&
-        //     (is_quiet || !see_result)) {
+        // Late Move Reductions
+        // we do not reduce on the following:
+        // depth <= 3, checking moves, moves coming out of check,
+        // on PV nodes, killer moves,  
+        if (played > 1) {
+            int16_t lmr_threshold = 2;
+            if (played >= lmr_threshold && depth >= 2 && !incheck && !is_checking && !pv_node &&
+                cur_move != td->killers[ply][0] &&
+                cur_move != td->killers[ply][1] &&
+                (is_quiet || !see_result)) {
 
-        //     if(is_quiet) {
-        //         reductions += (int16_t) (0.8 + log(played) * log(depth) / 2.5);   
-        //     } else {
-        //         reductions += is_checking ? 2 : 3;
-        //     }
-        // }
+                if(is_quiet) {
+                    reductions += (int16_t) (0.8 + log(played) * log(depth) / 2.5);   
+                } else {
+                    reductions += is_checking ? 2 : 3;
+                }
+            }
+        }
 
         if (played == 1) {
             value =

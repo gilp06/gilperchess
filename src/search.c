@@ -388,12 +388,13 @@ int16_t alphabeta(sthreaddata_t *td, bool root_node, bool from_null,
         int16_t reductions = 0;
 
         // Late Move Reductions
+        // don't reduce the tt_move if available and the first move in order 
         // we do not reduce on the following:
         // depth <= 3, checking moves, moves coming out of check,
         // on PV nodes, killer moves,  
         if (played > 1) {
             int16_t lmr_threshold = 2;
-            if (played >= lmr_threshold && depth >= 2 && !incheck && !is_checking && !pv_node &&
+            if (played > lmr_threshold && depth >= 2 && !incheck && !is_checking && !pv_node &&
                 cur_move != td->killers[ply][0] &&
                 cur_move != td->killers[ply][1] &&
                 (is_quiet || !see_result)) {

@@ -81,7 +81,6 @@ typedef struct s_ttable {
 
 static inline ttable_t init_transposition_table(size_t pow2size) {
     ttable_t table;
-    pthread_mutex_init(&table.mtx, NULL);
     table.entries = malloc(sizeof(tt_entry_t) * pow2size);
     table.count = pow2size;
     table.mask = pow2size-1;
@@ -90,7 +89,6 @@ static inline ttable_t init_transposition_table(size_t pow2size) {
 
 static inline void free_ttable(ttable_t* table)
 {
-    pthread_mutex_destroy(&table->mtx);
     free(table->entries);
     table->count = 0;
 }

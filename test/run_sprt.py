@@ -39,7 +39,6 @@ cmd = f"""
 -repeat
 -concurrency {CONCURRENCY}
 -pgnout file="games.pgn"
--log engine=true file="log.txt"
 """
 
 cmd = " ".join(cmd.split())

@@ -9,6 +9,8 @@
 #include <time.h>
 
 int main() {
+    srand(time(NULL));
+    
     setvbuf(stdout, NULL, _IONBF, 0);
 
     if (load_nnue() != 0) {
@@ -17,14 +19,9 @@ int main() {
     }
 
 
+
     init_pext_table();
     init_between_table();
-
-    // print_bb(BETWEEN_MASK[A1][B6]);
-    // print_bb(BETWEEN_MASK[B2][B4]);
-
-
-    srand(time(NULL));
 
     board_t b;
     init_board_from_start(&b);
@@ -36,6 +33,8 @@ int main() {
     while (!done) {
         done = uci_loop(&gs, &b);
     }
+
+    free_ttable(&gs.transposition_table);
 
     exit(0);
 }

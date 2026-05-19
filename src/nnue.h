@@ -8,7 +8,7 @@
 
 // C implementation of the NNUE from the bullet-lib simple.rs examples
 
-#define HIDDEN_SIZE 128
+#define HIDDEN_SIZE 256
 #define SCALE 400
 #define BUCKET_COUNT 1
 #define BUCKET_DIV ((32 + BUCKET_COUNT - 1) / BUCKET_COUNT)

@@ -182,7 +182,6 @@ void init_board_from_fen(board_t *board, const char *str) {
     board->st.fullmove_clock = fullmove;
     board->move_number = 0;
 
-
     update_pinners_and_blockers(board, SIDE_WHITE);
     update_pinners_and_blockers(board, SIDE_BLACK);
 
@@ -363,7 +362,7 @@ static bool handle_castling(board_t *board, move_t move, dstate_t *undo) {
     nnue_add_piece(board, to, pc);
     nnue_remove_piece(board, rsq_from, rook);
     nnue_add_piece(board, rsq_to, rook);
-    
+
     return false;
 }
 
@@ -403,10 +402,10 @@ static bool handle_promotion(board_t *board, move_t move, dstate_t *undo) {
         board->st.key ^= castling_changes_key(board->st.castling_rights &
                                               CASTLE_CAPTURE_MASK[us][to]);
         board->st.castling_rights &= ~CASTLE_CAPTURE_MASK[us][to];
-        
+
         nnue_remove_piece(board, to, pcaptured);
     }
-    
+
     nnue_add_piece(board, to, promo_piece);
     nnue_remove_piece(board, from, pc);
 
@@ -445,10 +444,9 @@ bool perform_move(board_t *board, move_t move, dstate_t *undo) {
 
     move_handlers[mt >> 14](board, move, undo);
 
-    
     update_pinners_and_blockers(board, SIDE_WHITE);
     update_pinners_and_blockers(board, SIDE_BLACK);
-    
+
     board->side_to_move = them;
     board->st.key ^= RANDOM_64[RANDOM_TURN];
 
@@ -621,7 +619,43 @@ bool in_check(board_t *board, side_t side) {
     return is_attacked(board, side, king_sq);
 }
 
+bool sufficient_material(board_t *board) {
+
+    bb_t white_bishops =
+        board->pieces_occ[PIECETYPE_BISHOP] & board->sides_occ[SIDE_WHITE];
+    bb_t black_bishops =
+        board->pieces_occ[PIECETYPE_BISHOP] & board->sides_occ[SIDE_BLACK];
+
+    bool white_bishop_pair = (white_bishops & 0x55aa55aa55aa55aaULL) &&
+                             (white_bishops & 0xaa55aa55aa55aa55ULL);
+    bool black_bishop_pair = (black_bishops & 0x55aa55aa55aa55aaULL) &&
+                             (black_bishops & 0xaa55aa55aa55aa55ULL);
+
+    bool white_knight_mate =
+        __builtin_popcountll(board->pieces_occ[PIECETYPE_KNIGHT] &
+                             board->sides_occ[SIDE_WHITE]) >= 3;
+    bool black_knight_mate =
+        __builtin_popcountll(board->pieces_occ[PIECETYPE_KNIGHT] &
+                             board->sides_occ[SIDE_BLACK]) >= 3;
+
+    bool white_bishop_knight_mate =
+        (board->pieces_occ[PIECETYPE_KNIGHT] & board->sides_occ[SIDE_WHITE]) &&
+        (board->pieces_occ[PIECETYPE_BISHOP] & board->sides_occ[SIDE_WHITE]);
+    bool black_bishop_knight_mate =
+        (board->pieces_occ[PIECETYPE_KNIGHT] & board->sides_occ[SIDE_BLACK]) &&
+        (board->pieces_occ[PIECETYPE_BISHOP] & board->sides_occ[SIDE_BLACK]);
+
+    return board->pieces_occ[PIECETYPE_QUEEN] ||
+           board->pieces_occ[PIECETYPE_ROOK] ||
+           board->pieces_occ[PIECETYPE_PAWN] || white_bishop_pair ||
+           black_bishop_pair || white_knight_mate || black_knight_mate ||
+           white_bishop_knight_mate || black_bishop_knight_mate;
+}
+
 bool is_draw(board_t *board) {
+
+    // if (!sufficient_material(board))
+    //     return true;
 
     if (board->st.halfmove_clock >= 100)
         return true;
@@ -639,8 +673,7 @@ bool is_draw(board_t *board) {
             repetitions++;
         }
     }
-    // if (repetitions >= 2)
-    //     printf("repetitions: %d\n", repetitions);
+
     return repetitions >= 2;
 }
 

@@ -2,6 +2,7 @@
 #include <setjmp.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "board.h"
 #include "eval.h"
@@ -25,6 +26,8 @@ const searchparams_t infinite_search = {.movetime = 0,
                                         .depth = 0,
                                         .movestogo = 0};
 
+
+// #define DATAGEN
 #define THREAD_COUNT 1
 #define CHECKMATE 30000
 
@@ -136,6 +139,10 @@ static searchlimits_t gen_limits(searchparams_t *params, side_t side_to_move) {
 
 void *go_search(void *arg) {
 
+    // for datagen, if we are in the first few moves of a game, pick random moves instead
+    srand(time(NULL) ^ pthread_self());
+
+    
     // init lmp lookup table
     // TODO: add options for all of these in one struct
     for (int d = 0; d < 12; d++) {
@@ -146,6 +153,9 @@ void *go_search(void *arg) {
     board_t const *starting_board = search_data->starting_board;
     searchparams_t params = search_data->search_settings;
     globalstate_t *gs = search_data->gs;
+
+
+        
 
     gs->limits = gen_limits(&params, starting_board->side_to_move);
     gs->start_time = get_real_time();
@@ -174,6 +184,9 @@ void search_bestmove(globalstate_t *gs, board_t const *starting_board) {
         memset(td->killers, 0, sizeof(td->killers));
         memset(td->quiet_history, 0, sizeof(td->quiet_history));
     }
+
+
+    
 
     // identify main thread
     td[0].worker = false;
@@ -208,7 +221,42 @@ void search_bestmove(globalstate_t *gs, board_t const *starting_board) {
 
 void *search(void *arg) {
 
+    // set thread's randomness
+    // srand(time(NULL) ^ pthread_self());
+
     sthreaddata_t *td = (sthreaddata_t *)arg;
+
+
+
+    #ifdef DATAGEN
+    if (td->board.move_number <= 24) {
+        printf("picking random\n");
+        move_t moves[256];
+        size_t quiet_count = 0, loud_count = 0;
+        size_t total;
+        generate_pseudolegal_moves(&td->board, td->board.side_to_move, moves, &quiet_count, true);
+        generate_pseudolegal_moves(&td->board, td->board.side_to_move, moves + quiet_count, &loud_count, false);
+        total = quiet_count+loud_count;
+        // printf("total moves: %d\n, rand %d", total, rand());
+
+        while (true) {
+            move_t cur_move = moves[(rand() % total)];
+            dstate_t undo;
+            if(!perform_move(&td->board, cur_move, &undo)) {
+                undo_move(&td->board, &undo);
+                continue;
+            }
+            undo_move(&td->board, &undo);
+            // play this move
+            td->tdpv_len = 1;
+            td->pvs[0] = cur_move;
+            td->score = evaluate(&td->board);
+            printf("info score cp %d\n", td->score);
+            fflush(stdout);
+            return NULL;
+        }
+    }
+    #endif
 
     int16_t alpha = -INT16_MAX;
     int16_t beta = INT16_MAX;

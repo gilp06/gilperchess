@@ -12,11 +12,11 @@ use bullet::{
 };
 
 fn main() {
-    let hl_size = 128;
-    let initial_lr = 0.001;
-    let final_lr = 0.00015;
+    let hl_size = 256;
+    let initial_lr = 0.01;
+    let final_lr = 0.0001;
     let start_superbatch = 1;
-    let superbatches = 40;
+    let superbatches = 120;
     let wdl_proportion = 1.0;
     // const NUM_OUTPUT_BUCKETS: usize = 1; // output bucket training time bad :(
 
@@ -50,7 +50,7 @@ fn main() {
         });
 
     let schedule = TrainingSchedule {
-        net_id: "lichess-elite-128-noeval".to_string(),
+        net_id: "lichess-elite-full-v0-256".to_string(),
         eval_scale: 400.0,
         steps: TrainingSteps {
             batch_size: 16384,
@@ -95,8 +95,8 @@ fn main() {
     // };
 
     let _data_loader_viri = {
-        let file_path =
-            "E:/data/Lichess Elite Database/lichess-elite-noeval/lichess-elite-noeval.viri";
+        let file_path = "E:/data/lichess_elite_complete.viri";
+        // "E:/data/Lichess Elite Database/lichess-elite-noeval/lichess-elite-noeval.viri";
         let buffer_size_mb = 1024;
         let threads = 4;
 

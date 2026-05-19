@@ -619,43 +619,40 @@ bool in_check(board_t *board, side_t side) {
     return is_attacked(board, side, king_sq);
 }
 
-bool sufficient_material(board_t *board) {
+// bool sufficient_material(board_t *board) {
 
-    bb_t white_bishops =
-        board->pieces_occ[PIECETYPE_BISHOP] & board->sides_occ[SIDE_WHITE];
-    bb_t black_bishops =
-        board->pieces_occ[PIECETYPE_BISHOP] & board->sides_occ[SIDE_BLACK];
+//     bb_t white_bishops =
+//         board->pieces_occ[PIECETYPE_BISHOP] & board->sides_occ[SIDE_WHITE];
+//     bb_t black_bishops =
+//         board->pieces_occ[PIECETYPE_BISHOP] & board->sides_occ[SIDE_BLACK];
 
-    bool white_bishop_pair = (white_bishops & 0x55aa55aa55aa55aaULL) &&
-                             (white_bishops & 0xaa55aa55aa55aa55ULL);
-    bool black_bishop_pair = (black_bishops & 0x55aa55aa55aa55aaULL) &&
-                             (black_bishops & 0xaa55aa55aa55aa55ULL);
+//     bool white_bishop_pair = (white_bishops & 0x55aa55aa55aa55aaULL) &&
+//                              (white_bishops & 0xaa55aa55aa55aa55ULL);
+//     bool black_bishop_pair = (black_bishops & 0x55aa55aa55aa55aaULL) &&
+//                              (black_bishops & 0xaa55aa55aa55aa55ULL);
 
-    bool white_knight_mate =
-        __builtin_popcountll(board->pieces_occ[PIECETYPE_KNIGHT] &
-                             board->sides_occ[SIDE_WHITE]) >= 3;
-    bool black_knight_mate =
-        __builtin_popcountll(board->pieces_occ[PIECETYPE_KNIGHT] &
-                             board->sides_occ[SIDE_BLACK]) >= 3;
+//     bool white_knight_mate =
+//         __builtin_popcountll(board->pieces_occ[PIECETYPE_KNIGHT] &
+//                              board->sides_occ[SIDE_WHITE]) >= 3;
+//     bool black_knight_mate =
+//         __builtin_popcountll(board->pieces_occ[PIECETYPE_KNIGHT] &
+//                              board->sides_occ[SIDE_BLACK]) >= 3;
 
-    bool white_bishop_knight_mate =
-        (board->pieces_occ[PIECETYPE_KNIGHT] & board->sides_occ[SIDE_WHITE]) &&
-        (board->pieces_occ[PIECETYPE_BISHOP] & board->sides_occ[SIDE_WHITE]);
-    bool black_bishop_knight_mate =
-        (board->pieces_occ[PIECETYPE_KNIGHT] & board->sides_occ[SIDE_BLACK]) &&
-        (board->pieces_occ[PIECETYPE_BISHOP] & board->sides_occ[SIDE_BLACK]);
+//     bool white_bishop_knight_mate =
+//         (board->pieces_occ[PIECETYPE_KNIGHT] & board->sides_occ[SIDE_WHITE]) &&
+//         (board->pieces_occ[PIECETYPE_BISHOP] & board->sides_occ[SIDE_WHITE]);
+//     bool black_bishop_knight_mate =
+//         (board->pieces_occ[PIECETYPE_KNIGHT] & board->sides_occ[SIDE_BLACK]) &&
+//         (board->pieces_occ[PIECETYPE_BISHOP] & board->sides_occ[SIDE_BLACK]);
 
-    return board->pieces_occ[PIECETYPE_QUEEN] ||
-           board->pieces_occ[PIECETYPE_ROOK] ||
-           board->pieces_occ[PIECETYPE_PAWN] || white_bishop_pair ||
-           black_bishop_pair || white_knight_mate || black_knight_mate ||
-           white_bishop_knight_mate || black_bishop_knight_mate;
-}
+//     return board->pieces_occ[PIECETYPE_QUEEN] ||
+//            board->pieces_occ[PIECETYPE_ROOK] ||
+//            board->pieces_occ[PIECETYPE_PAWN] || white_bishop_pair ||
+//            black_bishop_pair || white_knight_mate || black_knight_mate ||
+//            white_bishop_knight_mate || black_bishop_knight_mate;
+// }
 
 bool is_draw(board_t *board) {
-
-    // if (!sufficient_material(board))
-    //     return true;
 
     if (board->st.halfmove_clock >= 100)
         return true;
